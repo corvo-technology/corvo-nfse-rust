@@ -106,13 +106,13 @@ impl<'c> Invoices<'c> {
         self.transport.request_json(&spec).await
     }
 
-    /// Re-send the invoice by email (`POST /invoices/:id/send-email`).
+    /// Re-send the invoice by email (`POST /invoices/:id/email`).
     pub async fn send_email(
         &self,
         id: &str,
         idempotency_key: Option<&str>,
     ) -> Result<InvoiceEmailResult, CorvoError> {
-        let spec = RequestSpec::post(&format!("/invoices/{}/send-email", encode(id)))
+        let spec = RequestSpec::post(&format!("/invoices/{}/email", encode(id)))
             .idempotency_key(idempotency_key.map(str::to_owned));
         self.transport.request_json(&spec).await
     }
