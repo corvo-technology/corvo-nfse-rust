@@ -1,0 +1,29 @@
+[package]
+name = "corvo-nfse"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Idiomatic Rust SDK for the Corvo NFS-e API — issue, list, download, and reconcile Brazilian electronic service invoices."
+license = "MIT"
+repository = "https://github.com/corvo-technology/corvo-nfse-rust"
+homepage = "https://github.com/corvo-technology/corvo-nfse-rust"
+documentation = "https://docs.rs/corvo-nfse"
+readme = "README.md"
+keywords = ["nfse", "brazil", "invoice", "fiscal", "api-client"]
+categories = ["api-bindings", "asynchronous"]
+exclude = ["/.github"]
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+futures-util = "0.3"
+hmac = "0.12"
+sha2 = "0.10"
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+pretty_assertions = "1"
