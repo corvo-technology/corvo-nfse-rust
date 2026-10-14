@@ -47,7 +47,7 @@ impl<'c> Invoices<'c> {
     /// List invoices (`GET /invoices`).
     pub async fn list(&self, params: &InvoiceListParams) -> Result<Paginated<Invoice>, CorvoError> {
         self.transport
-            .list_page("/invoices", &list_query(params), Unwrap::DataProps)
+            .list_page("/invoices", &list_query(params), Unwrap::Props)
             .await
     }
 
@@ -59,7 +59,7 @@ impl<'c> Invoices<'c> {
             self.transport,
             "/invoices",
             list_query(params),
-            Unwrap::DataProps,
+            Unwrap::Props,
             params.cursor.clone(),
         )
     }
@@ -78,7 +78,7 @@ impl<'c> Invoices<'c> {
             .list_page(
                 &format!("/invoices/{}/events", encode(id)),
                 &query,
-                Unwrap::DataProps,
+                Unwrap::Props,
             )
             .await
     }

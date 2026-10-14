@@ -31,18 +31,21 @@ impl<'c> Certificates<'c> {
             .file_name
             .clone()
             .unwrap_or_else(|| "certificate.p12".to_owned());
-        let part = Part::bytes(params.file.clone())
-            .file_name(file_name)
-            .mime_str("application/x-pkcs12")
-            .map_err(|e| CorvoError::Config(format!("invalid certificate part: {e}")))?;
-        let form = Form::new()
-            .part("file", part)
-            .text("password", params.password.clone());
+        let file_bytes = params.file.clone();
+        let password = params.password.clone();
         let spec = RequestSpec::post(&format!(
             "/companies/{}/certificates",
             encode(company_id)
         ))
-        .form(form);
+        .form(move || {
+            let part = Part::bytes(file_bytes.clone())
+                .file_name(file_name.clone())
+                .mime_str("application/x-pkcs12")
+                .expect("valid x-pkcs12 mime");
+            Form::new()
+                .part("file", part)
+                .text("password", password.clone())
+        });
         self.transport.request_json(&spec).await
     }
 
@@ -60,7 +63,7 @@ impl<'c> Certificates<'c> {
             .list_page(
                 &format!("/companies/{}/certificates", encode(company_id)),
                 &query,
-                Unwrap::Data,
+                Unwrap::None,
             )
             .await
     }

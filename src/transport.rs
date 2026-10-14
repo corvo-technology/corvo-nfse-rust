@@ -25,6 +25,8 @@ pub(crate) enum Unwrap {
     Data,
     /// Return `body.data.props` (the domain entity behind a `props` wrapper).
     DataProps,
+    /// Return `item.props` (a single list item wrapped in a `props` object).
+    Props,
     /// Return the whole body untouched.
     None,
 }
@@ -59,7 +61,7 @@ pub(crate) struct RequestSpec {
     path: String,
     query: Vec<(String, String)>,
     json: Option<Value>,
-    form: Option<Form>,
+    form: Option<Box<dyn Fn() -> Form + Send + Sync>>,
     idempotency_key: Option<String>,
     unwrap: Unwrap,
 }
@@ -120,8 +122,8 @@ impl RequestSpec {
         Ok(self)
     }
 
-    pub(crate) fn form(mut self, form: Form) -> Self {
-        self.form = Some(form);
+    pub(crate) fn form(mut self, build: impl Fn() -> Form + Send + Sync + 'static) -> Self {
+        self.form = Some(Box::new(build));
         self
     }
 
@@ -246,8 +248,8 @@ impl Transport {
         if let Some(key) = &spec.idempotency_key {
             request = request.header("Idempotency-Key", key);
         }
-        if let Some(form) = &spec.form {
-            request = request.multipart(form.clone());
+        if let Some(build) = &spec.form {
+            request = request.multipart(build());
         } else if let Some(json) = &spec.json {
             request = request.json(json);
         }
@@ -271,7 +273,7 @@ impl Transport {
                 invalid_response(
                     status.as_u16(),
                     "empty response body where a value was expected".to_owned(),
-                    request_id,
+                    request_id.clone(),
                 )
             });
         }
@@ -279,7 +281,7 @@ impl Transport {
             invalid_response(
                 status.as_u16(),
                 "response body was not valid JSON".to_owned(),
-                request_id,
+                request_id.clone(),
             )
         })?;
         let value = unwrap_envelope(raw, spec.unwrap);
@@ -322,7 +324,7 @@ impl Transport {
         query: &[(String, String)],
         item_unwrap: Unwrap,
     ) -> Result<Paginated<T>, CorvoError> {
-        let spec = RequestSpec::get(path).query(query.to_vec());
+        let spec = RequestSpec::get(path).query(query.to_vec()).unwrap_mode(Unwrap::None);
         let page: RawPage = self.request_json(&spec).await?;
         let mut items = Vec::with_capacity(page.data.len());
         for raw in page.data {
@@ -370,6 +372,7 @@ fn unwrap_envelope(value: Value, mode: Unwrap) -> Value {
             .and_then(|d| d.get("props"))
             .cloned()
             .unwrap_or(Value::Null),
+        Unwrap::Props => value.get("props").cloned().unwrap_or(Value::Null),
     }
 }
 

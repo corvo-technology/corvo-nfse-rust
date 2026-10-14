@@ -1,7 +1,7 @@
 //! Billing resource: 2 ops.
 
 use crate::error::CorvoError;
-use crate::transport::{RequestSpec, Unwrap};
+use crate::transport::RequestSpec;
 use crate::types::billing::{BillingPlanResponse, QuotaStatus};
 
 /// Billing resource, obtained via [`Corvo::billing()`](crate::Corvo::billing).

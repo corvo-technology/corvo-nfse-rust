@@ -58,7 +58,7 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
     }
     bytes
         .chunks_exact(2)
-        .map(|pair| (hex_val(pair[0])? << 4) | hex_val(pair[1])?)
+        .map(|pair| Some((hex_val(pair[0])? << 4) | hex_val(pair[1])?))
         .collect::<Option<Vec<u8>>>()
 }
 

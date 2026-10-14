@@ -35,7 +35,7 @@ impl<'c> Webhooks<'c> {
         push_query(&mut query, "limit", params.limit.map(|l| l.to_string()));
         push_query(&mut query, "cursor", params.cursor);
         self.transport
-            .list_page("/webhooks", &query, Unwrap::Data)
+            .list_page("/webhooks", &query, Unwrap::None)
             .await
     }
 
@@ -86,7 +86,7 @@ impl<'c> Deliveries<'c> {
         params: WebhookDeliveryListParams,
     ) -> Result<Paginated<WebhookDelivery>, CorvoError> {
         self.transport
-            .list_page("/webhooks/deliveries", &list_query(&params), Unwrap::Data)
+            .list_page("/webhooks/deliveries", &list_query(&params), Unwrap::None)
             .await
     }
 
@@ -98,7 +98,7 @@ impl<'c> Deliveries<'c> {
             self.transport,
             "/webhooks/deliveries",
             list_query(&params),
-            Unwrap::Data,
+            Unwrap::None,
             params.cursor.clone(),
         )
     }

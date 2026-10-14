@@ -39,7 +39,7 @@ impl<'c> Credits<'c> {
         push_query(&mut query, "limit", params.limit.map(|l| l.to_string()));
         push_query(&mut query, "cursor", params.cursor);
         self.transport
-            .list_page("/credits/plans", &query, Unwrap::DataProps)
+            .list_page("/credits/plans", &query, Unwrap::Props)
             .await
     }
 
@@ -52,7 +52,7 @@ impl<'c> Credits<'c> {
         push_query(&mut query, "limit", params.limit.map(|l| l.to_string()));
         push_query(&mut query, "cursor", params.cursor);
         self.transport
-            .list_page("/credits/history", &query, Unwrap::DataProps)
+            .list_page("/credits/history", &query, Unwrap::Props)
             .await
     }
 
@@ -66,7 +66,7 @@ impl<'c> Credits<'c> {
             self.transport,
             "/credits/history",
             query,
-            Unwrap::DataProps,
+            Unwrap::Props,
             params.cursor,
         )
     }

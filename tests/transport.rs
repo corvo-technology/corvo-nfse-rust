@@ -266,7 +266,7 @@ async fn non_json_error_body_falls_back_to_status() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/credits"))
-        .respond_with(ResponseTemplate::new(502).set_body_raw_string("<html>bad gateway</html>", "text/html"))
+        .respond_with(ResponseTemplate::new(502).set_body_raw("<html>bad gateway</html>", "text/html"))
         .mount(&server)
         .await;
 
@@ -287,7 +287,7 @@ async fn invalid_json_success_body_is_error_not_panic() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/credits"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw_string("not json", "application/json"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("not json", "application/json"))
         .mount(&server)
         .await;
 

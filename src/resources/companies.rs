@@ -35,7 +35,7 @@ impl<'c> Companies<'c> {
         let mut query = Vec::new();
         push_query(&mut query, "limit", params.limit.map(|l| l.to_string()));
         push_query(&mut query, "cursor", params.cursor);
-        self.transport.list_page("/companies", &query, Unwrap::Data)
+        self.transport.list_page("/companies", &query, Unwrap::None)
             .await
     }
 
@@ -45,7 +45,7 @@ impl<'c> Companies<'c> {
     pub fn iterate(&self, params: CompanyListParams) -> Paginator<'c, Company> {
         let mut query = Vec::new();
         push_query(&mut query, "limit", params.limit.map(|l| l.to_string()));
-        Paginator::new(self.transport, "/companies", query, Unwrap::Data, params.cursor)
+        Paginator::new(self.transport, "/companies", query, Unwrap::None, params.cursor)
     }
 
     /// Fetch one company (`GET /companies/:id`).
