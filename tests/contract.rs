@@ -9,6 +9,7 @@
 use corvo_nfse::Corvo;
 
 #[tokio::test]
+#[ignore = "contract test — needs CORVO_API_KEY + CORVO_BASE_URL; run with `cargo test -- --ignored`"]
 async fn health_and_company_page_against_live_instance() {
     let enabled = std::env::var("CORVO_API_KEY").is_ok() && std::env::var("CORVO_BASE_URL").is_ok();
     if !enabled {
