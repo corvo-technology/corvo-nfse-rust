@@ -12,7 +12,9 @@ pub mod credits;
 pub mod invoice;
 pub mod webhook;
 
-pub use billing::{BillingPlanInfo, BillingPlanResponse, BillingSubscription, BillingUsage, QuotaStatus};
+pub use billing::{
+    BillingPlanInfo, BillingPlanResponse, BillingSubscription, BillingUsage, QuotaStatus,
+};
 pub use certificate::{Certificate, CertificateUploadParams};
 pub use common::{Environment, Paginated, Pagination};
 pub use company::{
@@ -20,13 +22,13 @@ pub use company::{
 };
 pub use credits::{CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction};
 pub use invoice::{
-    DownloadFormat, Invoice, InvoiceCustomerAddressInput, InvoiceCustomerInput,
-    InvoiceCustomerSnapshot, InvoiceCreateParams, InvoiceDownloadUrl, InvoiceEmailOptions,
+    DownloadFormat, Invoice, InvoiceCreateParams, InvoiceCustomerAddressInput,
+    InvoiceCustomerInput, InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions,
     InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput,
     InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus,
 };
 pub use webhook::{
-    Webhook, WebhookCreateParams, WebhookDelivery, WebhookDeliveryListParams,
-    WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookDeleteResult, WebhookTestResult,
-    WebhookWithSecret, WEBHOOK_EVENTS,
+    Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery, WebhookDeliveryListParams,
+    WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookTestResult, WebhookWithSecret,
+    WEBHOOK_EVENTS,
 };

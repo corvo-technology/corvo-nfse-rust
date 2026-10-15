@@ -34,7 +34,11 @@ pub fn verify_signature(
     let Some(hex) = header.trim().strip_prefix("sha256=") else {
         return false;
     };
-    if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+    if hex.len() != 64
+        || !hex
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
         return false;
     }
     let Some(received) = decode_hex(hex) else {

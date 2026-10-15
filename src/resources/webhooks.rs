@@ -5,9 +5,8 @@ use crate::resources::companies::encode;
 use crate::transport::{push_query, Paginator, RequestSpec, Unwrap};
 use crate::types::common::Paginated;
 use crate::types::webhook::{
-    Webhook, WebhookCreateParams, WebhookDelivery, WebhookDeliveryListParams,
-    WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookDeleteResult, WebhookTestResult,
-    WebhookWithSecret,
+    Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery, WebhookDeliveryListParams,
+    WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookTestResult, WebhookWithSecret,
 };
 
 /// Filters for listing webhooks.

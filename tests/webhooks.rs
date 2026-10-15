@@ -14,13 +14,21 @@ fn accepts_known_hmac_vector() {
 
 #[test]
 fn accepts_header_with_whitespace() {
-    assert!(verify_signature(BODY, Some("  sha256=8f9bd040d8f717b19618ab3395ddfa4b8c176b8dc863195227b88dd85426bbbc  "), SECRET));
+    assert!(verify_signature(
+        BODY,
+        Some("  sha256=8f9bd040d8f717b19618ab3395ddfa4b8c176b8dc863195227b88dd85426bbbc  "),
+        SECRET
+    ));
 }
 
 #[test]
 fn rejects_tampered_body() {
     let tampered = BODY.replace("inv_1", "inv_2");
-    assert!(!verify_signature(tampered.as_str(), Some(SIGNATURE), SECRET));
+    assert!(!verify_signature(
+        tampered.as_str(),
+        Some(SIGNATURE),
+        SECRET
+    ));
 }
 
 #[test]

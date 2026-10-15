@@ -48,10 +48,7 @@ impl Corvo {
         api_key: impl Into<String>,
         base_url: impl Into<String>,
     ) -> Result<Self, CorvoError> {
-        Self::builder()
-            .api_key(api_key)
-            .base_url(base_url)
-            .build()
+        Self::builder().api_key(api_key).base_url(base_url).build()
     }
 
     /// Create a client configured entirely from the environment

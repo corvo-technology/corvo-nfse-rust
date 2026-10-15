@@ -115,10 +115,10 @@ impl RequestSpec {
     }
 
     pub(crate) fn json<T: serde::Serialize>(mut self, value: &T) -> Result<Self, CorvoError> {
-        self.json = Some(
-            serde_json::to_value(value)
-                .map_err(|e| CorvoError::Config(format!("failed to serialize request body: {e}")))?,
-        );
+        self.json =
+            Some(serde_json::to_value(value).map_err(|e| {
+                CorvoError::Config(format!("failed to serialize request body: {e}"))
+            })?);
         Ok(self)
     }
 
@@ -139,7 +139,11 @@ impl RequestSpec {
 }
 
 /// Push `(key, value)` onto `query` when `value` is `Some`.
-pub(crate) fn push_query(query: &mut Vec<(String, String)>, key: &str, value: Option<impl Into<String>>) {
+pub(crate) fn push_query(
+    query: &mut Vec<(String, String)>,
+    key: &str,
+    value: Option<impl Into<String>>,
+) {
     if let Some(v) = value {
         query.push((key.to_owned(), v.into()));
     }
@@ -182,8 +186,7 @@ impl Transport {
         allow_insecure_http: bool,
     ) -> Result<Self, CorvoError> {
         let trimmed = base_url.trim_end_matches('/');
-        let url =
-            Url::parse(trimmed).map_err(|_| CorvoError::InvalidUrl(trimmed.to_owned()))?;
+        let url = Url::parse(trimmed).map_err(|_| CorvoError::InvalidUrl(trimmed.to_owned()))?;
         match url.scheme() {
             "https" => {}
             "http" => {
@@ -244,7 +247,10 @@ impl Transport {
             .request(spec.method.as_reqwest(), url)
             .header("X-API-Key", &self.api_key)
             .header(ACCEPT, "application/json")
-            .header(USER_AGENT, concat!("corvo-nfse-rust/", env!("CARGO_PKG_VERSION")));
+            .header(
+                USER_AGENT,
+                concat!("corvo-nfse-rust/", env!("CARGO_PKG_VERSION")),
+            );
         if let Some(key) = &spec.idempotency_key {
             request = request.header("Idempotency-Key", key);
         }
@@ -324,17 +330,15 @@ impl Transport {
         query: &[(String, String)],
         item_unwrap: Unwrap,
     ) -> Result<Paginated<T>, CorvoError> {
-        let spec = RequestSpec::get(path).query(query.to_vec()).unwrap_mode(Unwrap::None);
+        let spec = RequestSpec::get(path)
+            .query(query.to_vec())
+            .unwrap_mode(Unwrap::None);
         let page: RawPage = self.request_json(&spec).await?;
         let mut items = Vec::with_capacity(page.data.len());
         for raw in page.data {
             let value = unwrap_envelope(raw, item_unwrap);
             items.push(T::deserialize(value).map_err(|e| {
-                invalid_response(
-                    200,
-                    format!("failed to decode list item: {e}"),
-                    None,
-                )
+                invalid_response(200, format!("failed to decode list item: {e}"), None)
             })?);
         }
         Ok(Paginated {

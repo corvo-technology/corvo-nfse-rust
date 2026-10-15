@@ -353,4 +353,3 @@ impl DownloadFormat {
         }
     }
 }
-

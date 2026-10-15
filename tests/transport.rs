@@ -52,7 +52,9 @@ async fn unwraps_data_envelope() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/companies/c_1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": company_json("c_1") })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "data": company_json("c_1") })),
+        )
         .mount(&server)
         .await;
 
@@ -118,7 +120,9 @@ async fn sends_api_key_header_and_v1_prefix() {
             "corvo_test_0123456789abcdef0123456789abcdef01234567",
         ))
         .and(header("accept", "application/json"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": company_json("c_1") })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "data": company_json("c_1") })),
+        )
         .mount(&server)
         .await;
 
@@ -131,7 +135,9 @@ async fn uses_default_base_url_and_custom_prefix() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/custom/companies/c_1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": company_json("c_1") })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "data": company_json("c_1") })),
+        )
         .mount(&server)
         .await;
 
@@ -266,14 +272,21 @@ async fn non_json_error_body_falls_back_to_status() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/credits"))
-        .respond_with(ResponseTemplate::new(502).set_body_raw("<html>bad gateway</html>", "text/html"))
+        .respond_with(
+            ResponseTemplate::new(502).set_body_raw("<html>bad gateway</html>", "text/html"),
+        )
         .mount(&server)
         .await;
 
     let corvo = client_for(&server);
     let err = corvo.credits().balance().await.expect_err("502");
     match &err {
-        CorvoError::Api { status, code, message, .. } => {
+        CorvoError::Api {
+            status,
+            code,
+            message,
+            ..
+        } => {
             assert_eq!(*status, 502);
             assert_eq!(code, "http_502");
             assert!(message.contains("502"));

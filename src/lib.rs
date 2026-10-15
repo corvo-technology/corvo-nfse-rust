@@ -51,18 +51,20 @@ pub use error::{CorvoError, ErrorDetail};
 pub use resources::companies::CompanyListParams;
 pub use resources::credits::CreditPlanListParams;
 pub use resources::webhooks::WebhookListParams;
-pub use resources::{Billing, Certificates, Companies, Credits, Deliveries, Health, Invoices, Webhooks};
+pub use resources::{
+    Billing, Certificates, Companies, Credits, Deliveries, Health, Invoices, Webhooks,
+};
 pub use transport::{DownloadedFile, Paginator};
 pub use types::{
     BillingPlanInfo, BillingPlanResponse, BillingSubscription, BillingUsage, Certificate,
     CertificateUploadParams, Company, CompanyAddressInput, CompanyCreateParams,
     CompanyUpdateParams, CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction,
-    DownloadFormat, Environment, Invoice, InvoiceCustomerAddressInput, InvoiceCustomerInput,
-    InvoiceCustomerSnapshot, InvoiceCreateParams, InvoiceDownloadUrl, InvoiceEmailOptions,
+    DownloadFormat, Environment, Invoice, InvoiceCreateParams, InvoiceCustomerAddressInput,
+    InvoiceCustomerInput, InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions,
     InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput,
     InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus, Paginated, Pagination, QuotaStatus,
-    TaxRegime, Webhook, WebhookCreateParams, WebhookDelivery, WebhookDeliveryListParams,
-    WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookDeleteResult, WebhookTestResult,
+    TaxRegime, Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery,
+    WebhookDeliveryListParams, WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookTestResult,
     WebhookWithSecret, WEBHOOK_EVENTS,
 };
 pub use webhooks::verify_signature;

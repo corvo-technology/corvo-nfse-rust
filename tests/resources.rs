@@ -114,7 +114,11 @@ async fn certificate_upload_uses_explicit_file_name() {
 
     let corvo = client_for(&server);
     let params = CertificateUploadParams::new(b"p12".to_vec(), "pw").file_name("acme.p12");
-    corvo.certificates().upload("c_1", &params).await.expect("upload");
+    corvo
+        .certificates()
+        .upload("c_1", &params)
+        .await
+        .expect("upload");
 
     let requests = server.received_requests().await.unwrap();
     let body = String::from_utf8_lossy(&requests.last().unwrap().body);
