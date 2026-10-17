@@ -8,7 +8,7 @@
 - **Safe retries.** Issuing an invoice and sending an email accept an idempotency key.
 - **Webhook signature check** in constant time.
 
-Full API reference: <https://corvo.tech/en/api-docs>.
+Full API reference: <https://corvo.tech/en/docs>.
 
 ## Install
 
