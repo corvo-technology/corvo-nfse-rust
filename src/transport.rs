@@ -1,7 +1,7 @@
 //! HTTP transport: URL building, auth headers, envelope unwrapping, error
 //! mapping, and cursor pagination.
 //!
-//! [`Transport`] itself is internal; the public pieces are [`DownloadedFile`]
+//! `Transport` itself is internal; the public pieces are [`DownloadedFile`]
 //! and [`Paginator`], which appear in resource method signatures.
 
 use std::collections::VecDeque;
