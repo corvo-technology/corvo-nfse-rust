@@ -207,19 +207,19 @@ async fn credit_balance_unwraps_data() {
 }
 
 #[tokio::test]
-async fn credit_plans_unwrap_data_props() {
+async fn credit_plans_returns_the_items() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/credits/plans"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": [ { "props": {
+            "data": [ {
                 "id": "plan_1", "slug": "pro", "name": "Pro", "description": "pro plan",
-                "dailyLimit": 1000, "maxActiveCompanies": 5, "creditUnitPriceCents": 9,
+                "monthlyCreditAllowance": 750, "dailyLimit": null, "maxActiveCompanies": 5, "creditUnitPriceCents": 9,
                 "throughputRps": 10, "includesWebhooks": true, "includesXmlDownload": true,
                 "includesPdfDownload": true, "includesApiKeys": true, "supportTier": "priority",
                 "active": true, "createdAt": "2026-10-13T00:00:00Z",
                 "updatedAt": "2026-10-13T00:00:00Z"
-            }} ],
+            } ],
             "pagination": { "limit": 50, "hasMore": false, "nextCursor": null }
         })))
         .mount(&server)

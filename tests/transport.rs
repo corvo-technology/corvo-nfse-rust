@@ -62,16 +62,16 @@ async fn unwraps_data_envelope() {
     let company = corvo.companies().get("c_1").await.expect("get company");
     assert_eq!(company.id, "c_1");
     assert_eq!(company.legal_name, "Acme Ltd");
-    assert_eq!(company.tax_regime, TaxRegime::SimplesNacional);
+    assert_eq!(company.tax_regime, Some(TaxRegime::SimplesNacional));
 }
 
 #[tokio::test]
-async fn unwraps_data_props_envelope_for_invoices() {
+async fn returns_the_invoice_from_the_data_envelope() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/invoices/inv_1"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": { "props": {
+            "data": {
                 "id": "inv_1",
                 "companyId": "c_1",
                 "tenantId": "ten_1",
@@ -99,7 +99,7 @@ async fn unwraps_data_props_envelope_for_invoices() {
                 "documentsStatus": "pending",
                 "emailStatus": "pending",
                 "stage": "authorized"
-            }}
+            }
         })))
         .mount(&server)
         .await;
@@ -212,7 +212,9 @@ async fn rest_error_maps_to_api_error() {
         tax_regime: TaxRegime::Mei,
         trade_name: None,
         municipal_reg: None,
-        municipality_code: None,
+        send_municipal_reg: None,
+        municipality_code: "3550308".into(),
+        default_service_code: None,
         simple_national: None,
         special_regime: None,
         address: None,
@@ -389,7 +391,7 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
             "service": { "code": "0107" }
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": { "props": {
+            "data": {
                 "id": "inv_1", "companyId": "c_1", "tenantId": "ten_1",
                 "environment": "test", "documentKeyVersion": 1,
                 "emailSnapshot": { "send": false }, "externalId": null,
@@ -405,7 +407,7 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
                 "documentsReadyAt": null, "lastEmailStatus": null, "lastEmailSentAt": null,
                 "createdAt": "2026-10-13T00:00:00Z", "updatedAt": "2026-10-13T00:00:00Z",
                 "documentsStatus": "pending", "emailStatus": "pending", "stage": "pending"
-            }}
+            }
         })))
         .mount(&server)
         .await;
@@ -415,22 +417,18 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
         company_id: Some("c_1".into()),
         company_tax_id: None,
         external_id: None,
-        correlation_id: None,
-        customer: InvoiceCustomerInput {
-            name: "Customer".into(),
+        customer: Some(InvoiceCustomerInput {
+            name: Some("Customer".into()),
             tax_id: "52998224725".into(),
-            email: None,
-            address: None,
-        },
+            ..Default::default()
+        }),
         service: InvoiceServiceInput {
-            code: "0107".into(),
-            municipality_code: None,
-            description: None,
+            code: Some("0107".into()),
+            ..Default::default()
         },
         amount: 10.5,
         competence_date: "2026-10-13".into(),
-        email: None,
-        options: None,
+        ..Default::default()
     };
     let invoice = corvo
         .invoices()
@@ -513,4 +511,116 @@ async fn timeout_maps_to_timeout_error() {
         .expect("builder");
     let err = corvo.credits().balance().await.expect_err("timeout");
     assert!(matches!(err, CorvoError::Timeout), "got {err:?}");
+}
+
+#[tokio::test]
+async fn calculate_returns_the_estimate_and_omits_a_missing_customer() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/invoices/calculate"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {
+                "preEmission": true,
+                "status": "ready",
+                "taxes": {
+                    "iss": { "base": "15000.00", "rate": "3", "amount": "450.00" },
+                    "ibsTotal": { "base": "14550.00", "amount": "14.55" }
+                },
+                "netReceivableAmount": "15000.00",
+                "blocking": null
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    let corvo = client_for(&server);
+    let params = InvoiceCreateParams {
+        company_tax_id: Some("11222333000181".into()),
+        amount: 15000.0,
+        competence_date: "2026-10-16".into(),
+        ..Default::default()
+    };
+    let estimate = corvo
+        .invoices()
+        .calculate(&params)
+        .await
+        .expect("calculate");
+    assert_eq!(estimate.status, "ready");
+    assert_eq!(estimate.taxes.iss.as_ref().unwrap().amount, "450.00");
+    assert_eq!(estimate.taxes.ibs_total.as_ref().unwrap().rate, None);
+    let sent = server.received_requests().await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&sent[0].body).unwrap();
+    assert!(
+        body.get("customer").is_none(),
+        "a missing customer is omitted"
+    );
+}
+
+#[tokio::test]
+async fn calculate_blocked_is_data_not_an_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/invoices/calculate"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {
+                "status": "blocked",
+                "blocking": { "code": "TAX_RATE_NOT_FOUND", "message": "x", "step": "s" },
+                "pendingFields": [{ "field": "iss.rate", "reason": "missing" }]
+            }
+        })))
+        .mount(&server)
+        .await;
+    let corvo = client_for(&server);
+    let estimate = corvo
+        .invoices()
+        .calculate(&InvoiceCreateParams::default())
+        .await
+        .expect("a blocked estimate is not an error");
+    assert_eq!(estimate.blocking.unwrap().code, "TAX_RATE_NOT_FOUND");
+    assert_eq!(estimate.pending_fields.len(), 1);
+}
+
+#[tokio::test]
+async fn plans_catalog_list_get_and_quote() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/plans"))
+        .and(query_param("limit", "5"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{
+                "slug": "developer", "name": "Developer", "monthlyAllowance": 200,
+                "basePriceCents": 2990, "perCreditOverageCents": 15,
+                "monthlyTotalCents": 2990, "currency": "BRL"
+            }],
+            "pagination": { "limit": 5, "hasMore": false, "nextCursor": null }
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/plans/quote"))
+        .and(query_param("volume", "20000"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {
+                "volume": 20000, "recommended_plan": "volume", "plan_name": "Volume",
+                "monthly_allowance": 10000, "overage_credits": 10000,
+                "overage_cost_cents": 90000, "base_price_cents": 89990,
+                "total_estimated_cents": 179990, "currency": "BRL", "billing_cycle": "monthly"
+            }
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/plans/quote"))
+        .and(query_param("volume", "0"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": null })))
+        .mount(&server)
+        .await;
+
+    let corvo = client_for(&server);
+    let page = corvo.plans().list(Some(5), None).await.expect("list");
+    assert_eq!(page.data[0].slug, "developer");
+    let quote = corvo.plans().quote(20000).await.expect("quote").unwrap();
+    assert_eq!(quote.recommended_plan, "volume");
+    assert_eq!(quote.total_estimated_cents, 179990);
+    assert!(corvo.plans().quote(0).await.expect("quote").is_none());
 }

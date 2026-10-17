@@ -92,6 +92,10 @@ pub struct BillingPlanResponse {
 pub struct QuotaStatus {
     /// Whether the tenant can currently emit.
     pub can_emit: bool,
+    /// Why it cannot: `no_credits`, `daily_limit_exceeded`,
+    /// `company_limit_exceeded` or `plan_blocked`.
+    #[serde(default)]
+    pub reason: Option<String>,
     /// Credits remaining.
     pub credits_remaining: i64,
     /// Credits consumed this period.

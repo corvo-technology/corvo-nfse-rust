@@ -1,4 +1,4 @@
-//! Invoices resource: 9 ops + `iterate`.
+//! Invoices resource.
 
 use serde_json::json;
 
@@ -7,8 +7,8 @@ use crate::resources::companies::encode;
 use crate::transport::{push_query, DownloadedFile, Paginator, RequestSpec, Unwrap};
 use crate::types::common::Paginated;
 use crate::types::invoice::{
-    DownloadFormat, Invoice, InvoiceCreateParams, InvoiceDownloadUrl, InvoiceEmailResult,
-    InvoiceEvent, InvoiceListParams,
+    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCreateParams, InvoiceDownloadUrl,
+    InvoiceEmailResult, InvoiceEvent, InvoiceListParams,
 };
 
 /// Invoices resource, obtained via [`Corvo::invoices()`](crate::Corvo::invoices).
@@ -32,22 +32,32 @@ impl<'c> Invoices<'c> {
     ) -> Result<Invoice, CorvoError> {
         let spec = RequestSpec::post("/invoices")
             .json(params)?
-            .idempotency_key(idempotency_key.map(str::to_owned))
-            .unwrap_mode(Unwrap::DataProps);
+            .idempotency_key(idempotency_key.map(str::to_owned));
+        self.transport.request_json(&spec).await
+    }
+
+    /// Estimate the taxes of an invoice without issuing, storing or charging
+    /// anything (`POST /invoices/calculate`).
+    ///
+    /// A fiscal gap is not an error: the result has `status == "blocked"`.
+    pub async fn calculate(
+        &self,
+        params: &InvoiceCreateParams,
+    ) -> Result<InvoiceCalculation, CorvoError> {
+        let spec = RequestSpec::post("/invoices/calculate").json(params)?;
         self.transport.request_json(&spec).await
     }
 
     /// Fetch one invoice (`GET /invoices/:id`).
     pub async fn get(&self, id: &str) -> Result<Invoice, CorvoError> {
-        let spec =
-            RequestSpec::get(&format!("/invoices/{}", encode(id))).unwrap_mode(Unwrap::DataProps);
+        let spec = RequestSpec::get(&format!("/invoices/{}", encode(id)));
         self.transport.request_json(&spec).await
     }
 
     /// List invoices (`GET /invoices`).
     pub async fn list(&self, params: &InvoiceListParams) -> Result<Paginated<Invoice>, CorvoError> {
         self.transport
-            .list_page("/invoices", &list_query(params), Unwrap::Props)
+            .list_page("/invoices", &list_query(params), Unwrap::None)
             .await
     }
 
@@ -59,7 +69,7 @@ impl<'c> Invoices<'c> {
             self.transport,
             "/invoices",
             list_query(params),
-            Unwrap::Props,
+            Unwrap::None,
             params.cursor.clone(),
         )
     }
@@ -78,7 +88,7 @@ impl<'c> Invoices<'c> {
             .list_page(
                 &format!("/invoices/{}/events", encode(id)),
                 &query,
-                Unwrap::Props,
+                Unwrap::None,
             )
             .await
     }
