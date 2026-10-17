@@ -20,12 +20,16 @@ pub use common::{Environment, Paginated, Pagination};
 pub use company::{
     Company, CompanyAddressInput, CompanyCreateParams, CompanyUpdateParams, TaxRegime,
 };
-pub use credits::{CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction};
+pub use credits::{
+    CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction, PlanQuote,
+    PlanRecommendation,
+};
 pub use invoice::{
-    DownloadFormat, Invoice, InvoiceCreateParams, InvoiceCustomerAddressInput,
+    CalculatedTaxAmount, CalculatedTaxes, CalculationBlocking, CalculationPendingField,
+    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCreateParams, InvoiceCustomerAddressInput,
     InvoiceCustomerInput, InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions,
     InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput,
-    InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus,
+    InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus, InvoiceType,
 };
 pub use webhook::{
     Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery, WebhookDeliveryListParams,

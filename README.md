@@ -1,15 +1,14 @@
-# corvo-nfse-rust
+# corvo-nfse
 
-**The Rust SDK for the Corvo NFS-e API — built for self-hosted installs, `Result`-based errors, and pagination you don't have to think about.**
+**The Rust SDK for the [Corvo](https://corvo.tech) NFS-e API.** Register companies, calculate taxes, issue Brazilian service invoices (NFS-e), follow them by webhook and download the PDF and XML, from Rust 1.75+.
 
-Issue, list, download, and reconcile Brazilian electronic service invoices (NFS-e) from a Rust 1.75+ service. Async (`tokio` + `reqwest` with `rustls` — no OpenSSL), idiomatic `Result<T, CorvoError>`, and zero panics for API, network, or timeout failures.
+- **Async** on `tokio` + `reqwest` with `rustls` (no OpenSSL).
+- **`Result`-based errors.** API, network and timeout failures are `Err(CorvoError::…)` values carrying the server's stable `code`, the HTTP `status`, the `request_id` and the field-level `details`. Nothing panics.
+- **Pagination built in.** Every list returns `Paginated<T>` (`{ data, pagination }`), and `.iterate(params)` streams every page.
+- **Safe retries.** Issuing an invoice and sending an email accept an idempotency key.
+- **Webhook signature check** in constant time.
 
-## Why corvo-nfse-rust
-
-- **Self-hosted first.** Point it at your own Corvo instance with a base URL; the default `https://api.corvo.tech` only applies when you don't.
-- **`rustls`, not OpenSSL.** TLS comes from `rustls` via `reqwest`, so builds are hermetic everywhere.
-- **Errors that never panic.** API, network, and timeout failures are `Err(CorvoError::…)` values carrying the server's stable `code`, HTTP `status`, `request_id`, and field-level `details`. Match on them; propagate them with `?`.
-- **Pagination you don't have to think about.** Every list returns `Paginated<T>` (`{ data, pagination }`). Need every page? `.iterate(params).collect()` walks them for you; page failures surface as the first `Err`.
+Full API reference: <https://corvo.tech/en/api-docs>.
 
 ## Install
 
@@ -19,7 +18,9 @@ corvo-nfse = "0.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
-## SDK quickstart
+## Quickstart
+
+Start with a `corvo_test_...` key: invoices issued with it have no fiscal value.
 
 ```rust
 use corvo_nfse::Corvo;
@@ -27,8 +28,8 @@ use corvo_nfse::Corvo;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let corvo = Corvo::builder()
-        .api_key("corvo_live_xxx")          // or set CORVO_API_KEY
-        .base_url("https://api.corvo.tech") // or CORVO_BASE_URL for self-hosted
+        .api_key("corvo_test_...") // or set CORVO_API_KEY
+        // .base_url("https://api.corvo.tech") // default; also read from CORVO_BASE_URL
         .build()?;
 
     let page = corvo.companies().list(Default::default()).await?;
@@ -37,7 +38,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Register a company
+
+```rust
+use corvo_nfse::{CompanyCreateParams, TaxRegime};
+
+let company = corvo
+    .companies()
+    .create(&CompanyCreateParams {
+        legal_name: "Empresa Exemplo Ltda".into(),
+        tax_id: "11222333000181".into(),
+        tax_regime: TaxRegime::SimplesNacional,
+        municipality_code: "3550308".into(), // IBGE code, 7 digits
+        default_service_code: Some("010101".into()), // used when an invoice omits service.code
+        trade_name: None,
+        municipal_reg: None,
+        send_municipal_reg: None,
+        simple_national: None,
+        special_regime: None,
+        address: None,
+    })
+    .await?;
+```
+
+In `live`, also upload the A1 certificate with `corvo.certificates().upload(...)`. The company is ready when `company.status` is `"ready"` and `company.setup_gaps` is empty.
+
+### Estimate the taxes before issuing
+
+Nothing is issued, stored or charged.
+
+```rust
+use corvo_nfse::{InvoiceCreateParams, InvoiceServiceInput};
+
+let estimate = corvo
+    .invoices()
+    .calculate(&InvoiceCreateParams {
+        company_tax_id: Some("11222333000181".into()),
+        service: InvoiceServiceInput {
+            description: Some("Consultoria".into()),
+            ..Default::default()
+        },
+        amount: 1500.0,
+        competence_date: "2026-10-16".into(),
+        ..Default::default()
+    })
+    .await?;
+// estimate.status is "ready" or "blocked": a fiscal gap is data, not an error.
+```
+
 ### Issue an invoice
+
+Issuing is asynchronous: a successful call means the request was accepted, not that the invoice is authorized. Follow the status with `invoices().get()` or webhooks.
 
 ```rust
 use corvo_nfse::{InvoiceCreateParams, InvoiceCustomerInput, InvoiceServiceInput};
@@ -46,36 +97,34 @@ let invoice = corvo
     .invoices()
     .create(
         &InvoiceCreateParams {
-            company_id: Some("comp_…".into()),
-            customer: InvoiceCustomerInput {
-                name: "Customer".into(),
+            company_tax_id: Some("11222333000181".into()), // or company_id
+            // The customer is optional; when sent, tax_id (CPF or CNPJ) is required.
+            customer: Some(InvoiceCustomerInput {
                 tax_id: "52998224725".into(),
-                email: None,
-                address: None,
-            },
+                name: Some("Cliente".into()),
+                email: Some("cliente@example.com".into()),
+                ..Default::default()
+            }),
             service: InvoiceServiceInput {
-                code: "0107".into(),
-                municipality_code: Some("3550308".into()),
-                description: Some("Development services".into()),
+                description: Some("Consultoria".into()), // code and city default to the company's
+                ..Default::default()
             },
-            amount: 199.90,
-            competence_date: "2026-10-13".into(),
-            email: None,
-            options: None,
-            company_tax_id: None,
-            external_id: None,
-            correlation_id: None,
+            amount: 150.50,
+            competence_date: "2026-10-16".into(),
+            ..Default::default()
         },
-        Some("order-42"), // optional idempotency key
+        Some("order-42"), // idempotency key: the same key never issues twice
     )
     .await?;
-println!("issued {}", invoice.id);
+println!("queued {}", invoice.id);
 ```
+
+Set `options: Some(InvoiceOptions { invoice_type: Some(InvoiceType::Schedule), ..Default::default() })` with a future `competence_date` to schedule the issuance.
 
 ### Error handling
 
 ```rust
-use corvo_nfse::{Corvo, CorvoError};
+use corvo_nfse::CorvoError;
 
 match corvo.invoices().get("inv_…").await {
     Ok(invoice) => println!("{invoice:?}"),
@@ -87,16 +136,17 @@ match corvo.invoices().get("inv_…").await {
 }
 ```
 
-`CorvoError` variants: `Api` (with `status`, `code`, `message`, `details`, `request_id`, `retry_after`), `Network`, `Timeout`, `InvalidUrl`, `Config`. Helpers: `.status()` (0 for network/timeout), `.code()` (stable, `network_error`/`timeout` for local failures), `.request_id()`, `.retry_after()`.
+`CorvoError` variants: `Api` (with `status`, `code`, `message`, `details`, `request_id`, `retry_after`), `Network`, `Timeout`, `InvalidUrl`, `Config`.
 
 ### Iterate every page
 
 ```rust
-let invoices = corvo.invoices().iterate(&Default::default());
-let all: Vec<_> = invoices.collect().await?; // first page failure → Err
+let all: Vec<_> = corvo.invoices().iterate(&Default::default()).collect().await?; // a failed page is the first Err
 ```
 
-### Download PDF / XML
+### Download the PDF or XML
+
+The invoice must be `authorized` and have its documents ready.
 
 ```rust
 let pdf = corvo.invoices().pdf("inv_…").await?;
@@ -108,27 +158,27 @@ std::fs::write(pdf.file_name.as_deref().unwrap_or("invoice.pdf"), &pdf.bytes)?;
 ```rust
 use corvo_nfse::verify_signature;
 
-// raw_body: the request body bytes, exactly as received — do not re-serialize.
+// raw_body: the request body bytes exactly as received (do not re-serialize);
+// the header is X-Corvo-Signature.
 if verify_signature(&raw_body, signature_header, "whsec_…") {
-    // authentic
+    // authentic: deduplicate by the event id, the same event can arrive twice
 }
 ```
 
-HMAC-SHA256, constant-time comparison, shared known-answer vector across all Corvo SDKs.
-
-## Every operation
+## Resources
 
 | Namespace | Operations |
 |---|---|
 | `corvo.companies()` | `create`, `list`, `iterate`, `get`, `update`, `remove` |
-| `corvo.certificates()` | `upload` (multipart built for you), `list`, `remove` |
-| `corvo.invoices()` | `create`, `get`, `list`, `iterate`, `events`, `pdf`, `xml`, `download_url`, `send_email` |
+| `corvo.certificates()` | `upload`, `list`, `remove` |
+| `corvo.invoices()` | `create`, `calculate`, `list`, `iterate`, `get`, `events`, `pdf`, `xml`, `download_url`, `send_email` |
 | `corvo.webhooks()` | `list`, `create`, `remove`, `test`, `.deliveries().{list, iterate, stats, retry}` |
 | `corvo.credits()` | `balance`, `plans`, `history`, `iterate_history` |
 | `corvo.billing()` | `plan`, `usage` |
-| `corvo.health()` | `live`, `ready` (no API key required) |
+| `corvo.plans()` | `list`, `get`, `quote` (public price catalog) |
+| `corvo.health()` | `live`, `ready` |
 
-28 API-key operations plus 2 health checks — the exact surface of the Node SDK.
+Changing plans and the billing portal exist only in the dashboard, so they are not in the SDK.
 
 ## Configuration
 
@@ -136,40 +186,27 @@ HMAC-SHA256, constant-time comparison, shared known-answer vector across all Cor
 |---|---|---|
 | `api_key` | `CORVO_API_KEY` | required |
 | `base_url` | `CORVO_BASE_URL` | `https://api.corvo.tech` |
-| `prefix` | — | `v1` |
-| `timeout` | — | 30s |
-| `allow_insecure_http` | — | `false` (`http://` allowed only for loopback/private hosts) |
+| `prefix` | none | `v1` |
+| `timeout` | none | 30s |
+| `allow_insecure_http` | none | `false` (`http://` only for loopback and private hosts) |
 
-## CLI
+## Behavior
 
-This crate is a library — no CLI binary. For the CLI, use the Node SDK (`corvo-nfse-node`).
-
-## The contract (in-depth)
-
-Nine SDKs, one behavior. This SDK implements the same analysis as every other Corvo SDK, mirrored from the canonical Node SDK.
-
-**Auth.** Every request carries `X-API-Key` (never `Authorization: Bearer`). Keys are scoped per tenant; the base URL defaults to `https://api.corvo.tech` and is overridable for self-hosted deployments. All routes live under the `v1` prefix.
-
-**Response envelope.** Endpoints return one of three shapes, and the SDK unwraps them idiomatically: `{ "data": ... }` (single resource), `{ "data": { "props": ... } }` (resource behind a `props` wrapper), or no envelope (health checks, raw downloads). List endpoints return `{ "data": [...], "pagination": { "limit", "hasMore", "nextCursor" } }`. A `204 No Content` maps to an empty result.
-
-**Errors never throw.** Network failures, timeouts, non-2xx responses, and malformed JSON all resolve to a typed error carrying `status`, `code`, `message`, `details`, `requestId`, and `retryAfter` — returned alongside (or as) the result, never raised. `code` falls back to `http_<status>` when the body doesn't carry one; transport-level failures use `network_error` / `timeout` / `invalid_json`. The only operation that raises is the `iterate` helper, and only on the first page's failure.
-
-**Pagination.** List endpoints are cursor-paginated. The SDK exposes both a `list` (single page) and an `iterate`/stream helper that walks `nextCursor` until `hasMore` is false.
-
-**Idempotency.** Invoice create and send-email accept an idempotency key, sent as the `Idempotency-Key` header so retries are safe.
-
-**Webhooks.** Deliveries are signed with HMAC-SHA256 over the raw body. The SDK exposes a timing-safe `verifySignature(rawBody, header, secret)`.
-
-**Surface.** Exactly 28 operations across companies, certificates, invoices, webhooks (incl. nested deliveries), credits, and billing — plus `health/live` and `health/ready`.
+- **Auth.** Every request sends `X-API-Key`. Keys are `corvo_test_...` or `corvo_live_...` and belong to one account and environment; the key decides the environment.
+- **Responses.** Single resources and list items come back as the API's `data`; lists add `pagination`. Optional fields are `Option<_>`.
+- **Errors.** `code` is the API's `ERROR_*` code, falling back to `http_<status>`; local failures use `network_error` and `timeout`. On `429`, `retry_after` holds the seconds to wait.
 
 ## Development
 
-```sh
-cargo build
-cargo test              # unit + mock-HTTP integration tests; contract test auto-skips
-CORVO_API_KEY=… CORVO_BASE_URL=… cargo test --test contract   # live contract test
+```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test       # wiremock tests; the contract test is #[ignore] without env
+cargo doc --no-deps
 ```
+
+The contract test in `tests/contract.rs` runs only when `CORVO_API_KEY` and `CORVO_BASE_URL` point to a reachable instance.
 
 ## License
 
-MIT © Corvo Technology
+MIT, see [LICENSE](LICENSE).

@@ -1,7 +1,7 @@
 //! HTTP transport: URL building, auth headers, envelope unwrapping, error
 //! mapping, and cursor pagination.
 //!
-//! [`Transport`] itself is internal; the public pieces are [`DownloadedFile`]
+//! `Transport` itself is internal; the public pieces are [`DownloadedFile`]
 //! and [`Paginator`], which appear in resource method signatures.
 
 use std::collections::VecDeque;
@@ -18,15 +18,11 @@ use serde_json::Value;
 use crate::error::{CorvoError, ErrorDetail};
 use crate::types::common::{Paginated, Pagination};
 
-/// Envelope unwrapping mode, mirroring the Node SDK's `Unwrap`.
+/// Envelope unwrapping mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Unwrap {
     /// Return `body.data` (or `null` when missing).
     Data,
-    /// Return `body.data.props` (the domain entity behind a `props` wrapper).
-    DataProps,
-    /// Return `item.props` (a single list item wrapped in a `props` object).
-    Props,
     /// Return the whole body untouched.
     None,
 }
@@ -269,7 +265,7 @@ impl Transport {
     ) -> Result<T, CorvoError> {
         let response = self.send(spec).await?;
         let status = response.status();
-        let request_id = header_str(&response.headers(), "x-request-id").map(str::to_owned);
+        let request_id = header_str(response.headers(), "x-request-id").map(str::to_owned);
         if !status.is_success() {
             return Err(to_error(status, response, request_id).await);
         }
@@ -307,13 +303,13 @@ impl Transport {
     ) -> Result<DownloadedFile, CorvoError> {
         let response = self.send(spec).await?;
         let status = response.status();
-        let request_id = header_str(&response.headers(), "x-request-id").map(str::to_owned);
+        let request_id = header_str(response.headers(), "x-request-id").map(str::to_owned);
         if !status.is_success() {
             return Err(to_error(status, response, request_id).await);
         }
-        let mime_type = header_str(&response.headers(), "content-type")
+        let mime_type = header_str(response.headers(), "content-type")
             .map(|v| v.split(';').next().unwrap_or(v).trim().to_owned());
-        let file_name = header_str(&response.headers(), "content-disposition")
+        let file_name = header_str(response.headers(), "content-disposition")
             .and_then(parse_content_disposition_filename);
         let bytes = response.bytes().await.map_err(map_reqwest_error)?.to_vec();
         Ok(DownloadedFile {
@@ -371,22 +367,16 @@ fn unwrap_envelope(value: Value, mode: Unwrap) -> Value {
     match mode {
         Unwrap::None => value,
         Unwrap::Data => value.get("data").cloned().unwrap_or(Value::Null),
-        Unwrap::DataProps => value
-            .get("data")
-            .and_then(|d| d.get("props"))
-            .cloned()
-            .unwrap_or(Value::Null),
-        Unwrap::Props => value.get("props").cloned().unwrap_or(Value::Null),
     }
 }
 
-/// Map a non-2xx response to [`CorvoError::Api`], mirroring the Node SDK.
+/// Map a non-2xx response to [`CorvoError::Api`].
 async fn to_error(
     status: StatusCode,
     response: Response,
     request_id: Option<String>,
 ) -> CorvoError {
-    let retry_after_header = header_str(&response.headers(), RETRY_AFTER.as_str())
+    let retry_after_header = header_str(response.headers(), RETRY_AFTER.as_str())
         .and_then(|v| v.trim().parse::<u64>().ok());
     let body = response.text().await.unwrap_or_default();
     let parsed: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
