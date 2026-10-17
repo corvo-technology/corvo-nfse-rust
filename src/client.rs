@@ -10,6 +10,7 @@ use crate::resources::companies::Companies;
 use crate::resources::credits::Credits;
 use crate::resources::health::Health;
 use crate::resources::invoices::Invoices;
+use crate::resources::plans::Plans;
 use crate::resources::webhooks::Webhooks;
 use crate::transport::Transport;
 
@@ -77,6 +78,11 @@ impl Corvo {
     /// Invoices resource.
     pub fn invoices(&self) -> Invoices<'_> {
         Invoices::new(&self.transport)
+    }
+
+    /// Plans resource (public price catalog).
+    pub fn plans(&self) -> Plans<'_> {
+        Plans::new(&self.transport)
     }
 
     /// Webhooks resource (including deliveries).

@@ -58,14 +58,18 @@ pub enum InvoiceStage {
 }
 
 /// Customer (taker) input for issuing an invoice.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// When a customer is sent, `tax_id` (CPF or CNPJ) is required; leave
+/// [`InvoiceCreateParams::customer`] as `None` for an invoice without one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceCustomerInput {
-    /// Customer full name or company name.
-    pub name: String,
-    /// Customer CPF/CNPJ, digits only.
+    /// Customer CPF/CNPJ.
     pub tax_id: String,
-    /// Customer email, if you want the NFS-e emailed to them.
+    /// Customer full name or company name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Customer email; required when the invoice must be emailed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
     /// Customer postal address.
@@ -74,7 +78,7 @@ pub struct InvoiceCustomerInput {
 }
 
 /// Customer address input.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceCustomerAddressInput {
     /// Street name.
@@ -94,31 +98,49 @@ pub struct InvoiceCustomerAddressInput {
     pub country: Option<String>,
 }
 
-/// Service (rps line) description for an invoice.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Service description for an invoice. Every field is optional.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceServiceInput {
-    /// Municipal service code (código de tributação nacional).
-    pub code: String,
-    /// IBGE municipality code where the service is rendered.
+    /// National service code (cTribNac, 6 digits). Defaults to the company's
+    /// `default_service_code`, then to `100901`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    /// IBGE municipality code (7 digits) where the service is rendered.
+    /// Defaults to the company's city.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub municipality_code: Option<String>,
-    /// Human-readable service description.
+    /// Human-readable service description; defaults to the name of the code.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 
+/// When an invoice is issued.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InvoiceType {
+    /// Issue right away (the default).
+    #[serde(rename = "IMMEDIATE")]
+    Immediate,
+    /// Issue on the (future) competence date.
+    #[serde(rename = "SCHEDULE")]
+    Schedule,
+}
+
 /// Per-invoice option flags.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceOptions {
     /// Email delivery behavior.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<InvoiceEmailOptions>,
+    /// `Schedule` with a future competence date schedules the issuance (up to
+    /// 15 days ahead by default).
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub invoice_type: Option<InvoiceType>,
 }
 
 /// Email delivery options.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceEmailOptions {
     /// Whether to email the NFS-e to the customer on authorization.
@@ -126,11 +148,13 @@ pub struct InvoiceEmailOptions {
     pub send: Option<bool>,
 }
 
-/// Parameters for creating an invoice.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Parameters for creating (or calculating) an invoice.
+///
+/// Identify the company with `company_id` or `company_tax_id`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceCreateParams {
-    /// Company to issue from; omit to use the default company.
+    /// Company to issue from.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub company_id: Option<String>,
     /// Company CNPJ, used instead of `company_id`.
@@ -139,20 +163,22 @@ pub struct InvoiceCreateParams {
     /// Your own identifier for this invoice.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_id: Option<String>,
-    /// Correlation id for tracing.
+    /// The customer (taker). Optional: omit it for an invoice without one.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub correlation_id: Option<String>,
-    /// The customer (taker).
-    pub customer: InvoiceCustomerInput,
+    pub customer: Option<InvoiceCustomerInput>,
     /// The service being invoiced.
     pub service: InvoiceServiceInput,
-    /// Invoice amount (BRL).
+    /// Invoice amount in BRL: positive, up to 2 decimal places.
     pub amount: f64,
     /// Competence date (`YYYY-MM-DD`).
     pub competence_date: String,
-    /// Email to receive the NFS-e; defaults to the customer email.
+    /// Unconditional discount in BRL, from 0 up to `amount`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
+    pub discount: Option<f64>,
+    /// Request the email notification (default `false`); `options.email.send`
+    /// wins when set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<bool>,
     /// Extra option flags.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<InvoiceOptions>,
@@ -163,7 +189,8 @@ pub struct InvoiceCreateParams {
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceCustomerSnapshot {
     /// Customer name.
-    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Customer email.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
@@ -264,6 +291,8 @@ pub struct Invoice {
     pub email_status: Option<String>,
     /// Coarse pipeline stage.
     pub stage: InvoiceStage,
+    /// When a scheduled invoice is released (RFC 3339); `None` for an immediate one.
+    pub scheduled_for: Option<String>,
 }
 
 /// A status-transition event on an invoice.
@@ -352,4 +381,110 @@ impl DownloadFormat {
             DownloadFormat::Xml => "xml",
         }
     }
+}
+
+/// One tax of a pre-emission estimate. Amounts are decimal strings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalculatedTaxAmount {
+    /// Calculation base.
+    pub base: String,
+    /// Rate in percent; absent on `ibs_total`, which sums state and municipal IBS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate: Option<String>,
+    /// Tax amount.
+    pub amount: String,
+}
+
+/// The taxes of a pre-emission estimate.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalculatedTaxes {
+    /// ISS (municipal service tax).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iss: Option<CalculatedTaxAmount>,
+    /// CBS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cbs: Option<CalculatedTaxAmount>,
+    /// State IBS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ibs_state: Option<CalculatedTaxAmount>,
+    /// Municipal IBS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ibs_city: Option<CalculatedTaxAmount>,
+    /// Total IBS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ibs_total: Option<CalculatedTaxAmount>,
+}
+
+/// Why an estimate is blocked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CalculationBlocking {
+    /// Stable code, for example `TAX_RATE_NOT_FOUND`.
+    pub code: String,
+    /// Human-readable message.
+    pub message: String,
+    /// Pipeline step that blocked.
+    pub step: String,
+}
+
+/// A field missing for the estimate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CalculationPendingField {
+    /// The missing field.
+    pub field: String,
+    /// Why it is needed.
+    pub reason: String,
+}
+
+/// Pre-emission estimate returned by `invoices().calculate()`.
+///
+/// `status` is `"ready"` or `"blocked"`: a fiscal gap is data, not an error.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceCalculation {
+    /// `"ready"` or `"blocked"`.
+    pub status: String,
+    /// Legal notice: the values are not a fiscal document.
+    #[serde(default)]
+    pub disclaimer: Option<String>,
+    /// Competence date (`YYYY-MM-DD`).
+    #[serde(default)]
+    pub competence_date: Option<String>,
+    /// Tax regime used.
+    #[serde(default)]
+    pub tax_regime: Option<String>,
+    /// Service classification (free-form).
+    #[serde(default)]
+    pub classification: Value,
+    /// Which taxes apply and why (free-form).
+    #[serde(default)]
+    pub applicability: Value,
+    /// The calculated taxes.
+    #[serde(default)]
+    pub taxes: CalculatedTaxes,
+    /// Withholdings (free-form).
+    #[serde(default)]
+    pub withholdings: Vec<Value>,
+    /// Net amount to receive, a decimal string.
+    #[serde(default)]
+    pub net_receivable_amount: Option<String>,
+    /// Whether collection is waived (2026 test phase).
+    #[serde(default)]
+    pub collection_waived: Option<bool>,
+    /// Calculation provenance (free-form).
+    #[serde(default)]
+    pub calculation: Value,
+    /// Non-blocking warnings (free-form).
+    #[serde(default)]
+    pub warnings: Vec<Value>,
+    /// Fields still missing.
+    #[serde(default)]
+    pub pending_fields: Vec<CalculationPendingField>,
+    /// Set when `status` is `"blocked"`.
+    #[serde(default)]
+    pub blocking: Option<CalculationBlocking>,
+    /// Pipeline trace (free-form).
+    #[serde(default)]
+    pub trace: Vec<Value>,
 }

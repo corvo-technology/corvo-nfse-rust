@@ -1,12 +1,12 @@
 [package]
 name = "corvo-nfse"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.75"
-description = "Idiomatic Rust SDK for the Corvo NFS-e API — issue, list, download, and reconcile Brazilian electronic service invoices."
+description = "Rust SDK for the Corvo NFS-e API: issue Brazilian service invoices, calculate taxes, verify webhooks."
 license = "MIT"
 repository = "https://github.com/corvo-technology/corvo-nfse-rust"
-homepage = "https://github.com/corvo-technology/corvo-nfse-rust"
+homepage = "https://corvo.tech"
 documentation = "https://docs.rs/corvo-nfse"
 readme = "README.md"
 keywords = ["nfse", "brazil", "invoice", "fiscal", "api-client"]

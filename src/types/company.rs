@@ -31,26 +31,31 @@ impl TaxRegime {
     }
 }
 
-/// Postal address input for a company.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Postal address input for a company. Every field is optional.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompanyAddressInput {
     /// Street name.
-    pub street: String,
-    /// Street number; optional (some municipalities omit it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub street: Option<String>,
+    /// Street number.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<String>,
     /// Complement (suite, floor, …).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub complement: Option<String>,
     /// District (bairro).
-    pub district: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub district: Option<String>,
     /// City name.
-    pub city: String,
-    /// Two-letter state code.
-    pub state: String,
-    /// CEP (zip code).
-    pub zip: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub city: Option<String>,
+    /// Two-letter state code (UF).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    /// CEP, 8 digits with or without punctuation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zip: Option<String>,
 }
 
 /// Parameters for creating a company.
@@ -59,24 +64,33 @@ pub struct CompanyAddressInput {
 pub struct CompanyCreateParams {
     /// Registered legal name (razão social).
     pub legal_name: String,
-    /// CNPJ tax id, digits only.
+    /// CNPJ.
     pub tax_id: String,
     /// Tax regime.
     pub tax_regime: TaxRegime,
+    /// IBGE code of the company's city (7 digits).
+    pub municipality_code: String,
     /// Trade name (nome fantasia).
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub trade_name: Option<String>,
-    /// Municipal registration number (inscrição municipal).
+    /// Municipal registration. Stored, but only sent on the invoice when
+    /// `send_municipal_reg` is `true`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub municipal_reg: Option<String>,
-    /// IBGE municipality code of issuance.
+    /// Default `false`: turn it on only if the city registered the company in
+    /// the national registry.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub municipality_code: Option<String>,
+    pub send_municipal_reg: Option<bool>,
+    /// National service code (6 digits) used when an invoice omits `service.code`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_service_code: Option<String>,
     /// Whether the company is enrolled in Simples Nacional.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub simple_national: Option<bool>,
     /// Special tax regime note.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub special_regime: Option<String>,
     /// Postal address.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,9 +110,15 @@ pub struct CompanyUpdateParams {
     /// Municipal registration number.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub municipal_reg: Option<String>,
+    /// Whether to send the municipal registration on the invoice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub send_municipal_reg: Option<bool>,
     /// IBGE municipality code.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub municipality_code: Option<String>,
+    /// National service code (6 digits).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_service_code: Option<String>,
     /// Tax regime.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tax_regime: Option<TaxRegime>,
@@ -128,29 +148,45 @@ pub struct Company {
     /// CNPJ, digits only.
     pub tax_id: String,
     /// Municipal registration number, if set.
+    #[serde(default)]
     pub municipal_reg: Option<String>,
+    /// Whether the municipal registration is sent on the invoice.
+    #[serde(default)]
+    pub send_municipal_reg: Option<bool>,
     /// IBGE municipality code, if set.
+    #[serde(default)]
     pub municipality_code: Option<String>,
+    /// Default national service code, if set.
+    #[serde(default)]
+    pub default_service_code: Option<String>,
     /// Tax regime.
-    pub tax_regime: TaxRegime,
+    #[serde(default)]
+    pub tax_regime: Option<TaxRegime>,
     /// Simples Nacional enrollment.
     pub simple_national: bool,
     /// Special regime note, if set.
     pub special_regime: Option<String>,
     /// Address street, if provided.
+    #[serde(default)]
     pub address_street: Option<String>,
     /// Address number, if provided.
+    #[serde(default)]
     pub address_number: Option<String>,
     /// Address complement, if provided.
+    #[serde(default)]
     pub address_complement: Option<String>,
     /// Address district, if provided.
+    #[serde(default)]
     pub address_district: Option<String>,
-    /// Address city.
-    pub address_city: String,
-    /// Address state code.
-    pub address_state: String,
-    /// Address CEP.
-    pub address_zip: String,
+    /// Address city, if provided.
+    #[serde(default)]
+    pub address_city: Option<String>,
+    /// Address state code, if provided.
+    #[serde(default)]
+    pub address_state: Option<String>,
+    /// Address CEP, if provided.
+    #[serde(default)]
+    pub address_zip: Option<String>,
     /// Fiscal schema version in use.
     pub fiscal_schema_version: String,
     /// Issuance environment (`test` or `live`).
@@ -162,7 +198,9 @@ pub struct Company {
     /// Last update timestamp (RFC 3339).
     pub updated_at: String,
     /// Deletion timestamp, if soft-deleted.
+    #[serde(default)]
     pub deleted_at: Option<String>,
-    /// Setup steps still missing before the company can issue.
+    /// Setup steps still missing before the company can issue
+    /// (`municipality_code`, `certificate`).
     pub setup_gaps: Vec<String>,
 }

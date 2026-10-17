@@ -5,7 +5,8 @@ use serde_json::Value;
 
 use crate::types::common::Environment;
 
-/// Every event a webhook can subscribe to.
+/// Every event a webhook can subscribe to. `webhook.test` is only sent by
+/// `webhooks().test()` and cannot be subscribed.
 pub const WEBHOOK_EVENTS: [&str; 9] = [
     "nfse.invoice.authorized",
     "nfse.invoice.rejected",
@@ -15,7 +16,7 @@ pub const WEBHOOK_EVENTS: [&str; 9] = [
     "nfse.invoice.documents_ready",
     "nfse.invoice.email_sent",
     "nfse.invoice.email_failed",
-    "webhook.test",
+    "nfse.invoice.fiscal_discrepancy",
 ];
 
 /// A registered webhook endpoint.

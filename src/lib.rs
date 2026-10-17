@@ -1,10 +1,9 @@
 //! # corvo-nfse
 //!
-//! Idiomatic Rust SDK for the Corvo NFS-e API — issue, list, download, and
-//! reconcile Brazilian electronic service invoices (NFS-e).
+//! Rust SDK for the [Corvo](https://corvo.tech) NFS-e API: register companies,
+//! calculate taxes, issue Brazilian service invoices (NFS-e), follow them by
+//! webhook and download the PDF and XML.
 //!
-//! * **Self-hosted first** — point it at your instance with a base URL; the
-//!   default `https://api.corvo.tech` only applies when you don't.
 //! * **Result-based errors** — every call returns `Result<T, CorvoError>`.
 //!   API, network, and timeout failures are values with the server's stable
 //!   `code`, HTTP `status`, `request_id`, and field-level `details`.
@@ -52,20 +51,22 @@ pub use resources::companies::CompanyListParams;
 pub use resources::credits::CreditPlanListParams;
 pub use resources::webhooks::WebhookListParams;
 pub use resources::{
-    Billing, Certificates, Companies, Credits, Deliveries, Health, Invoices, Webhooks,
+    Billing, Certificates, Companies, Credits, Deliveries, Health, Invoices, Plans, Webhooks,
 };
 pub use transport::{DownloadedFile, Paginator};
 pub use types::{
-    BillingPlanInfo, BillingPlanResponse, BillingSubscription, BillingUsage, Certificate,
+    BillingPlanInfo, BillingPlanResponse, BillingSubscription, BillingUsage, CalculatedTaxAmount,
+    CalculatedTaxes, CalculationBlocking, CalculationPendingField, Certificate,
     CertificateUploadParams, Company, CompanyAddressInput, CompanyCreateParams,
     CompanyUpdateParams, CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction,
-    DownloadFormat, Environment, Invoice, InvoiceCreateParams, InvoiceCustomerAddressInput,
-    InvoiceCustomerInput, InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions,
-    InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput,
-    InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus, Paginated, Pagination, QuotaStatus,
-    TaxRegime, Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery,
-    WebhookDeliveryListParams, WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookTestResult,
-    WebhookWithSecret, WEBHOOK_EVENTS,
+    DownloadFormat, Environment, Invoice, InvoiceCalculation, InvoiceCreateParams,
+    InvoiceCustomerAddressInput, InvoiceCustomerInput, InvoiceCustomerSnapshot, InvoiceDownloadUrl,
+    InvoiceEmailOptions, InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOptions,
+    InvoiceServiceInput, InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus, InvoiceType,
+    Paginated, Pagination, PlanQuote, PlanRecommendation, QuotaStatus, TaxRegime, Webhook,
+    WebhookCreateParams, WebhookDeleteResult, WebhookDelivery, WebhookDeliveryListParams,
+    WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookTestResult, WebhookWithSecret,
+    WEBHOOK_EVENTS,
 };
 pub use webhooks::verify_signature;
 
