@@ -26,10 +26,11 @@ pub use credits::{
 };
 pub use invoice::{
     CalculatedTaxAmount, CalculatedTaxes, CalculationBlocking, CalculationPendingField,
-    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCreateParams, InvoiceCustomerAddressInput,
-    InvoiceCustomerInput, InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions,
-    InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput,
-    InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus, InvoiceType,
+    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCancelParams, InvoiceCancellationReason,
+    InvoiceCreateParams, InvoiceCustomerAddressInput, InvoiceCustomerInput,
+    InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions, InvoiceEmailResult,
+    InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput, InvoiceServiceSnapshot,
+    InvoiceStage, InvoiceStatus, InvoiceType,
 };
 pub use webhook::{
     Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery, WebhookDeliveryListParams,

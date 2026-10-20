@@ -7,8 +7,8 @@ use crate::resources::companies::encode;
 use crate::transport::{push_query, DownloadedFile, Paginator, RequestSpec, Unwrap};
 use crate::types::common::Paginated;
 use crate::types::invoice::{
-    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCreateParams, InvoiceDownloadUrl,
-    InvoiceEmailResult, InvoiceEvent, InvoiceListParams,
+    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCancelParams, InvoiceCreateParams,
+    InvoiceDownloadUrl, InvoiceEmailResult, InvoiceEvent, InvoiceListParams,
 };
 
 /// Invoices resource, obtained via [`Corvo::invoices()`](crate::Corvo::invoices).
@@ -124,6 +124,51 @@ impl<'c> Invoices<'c> {
     ) -> Result<InvoiceEmailResult, CorvoError> {
         let spec = RequestSpec::post(&format!("/invoices/{}/email", encode(id)))
             .idempotency_key(idempotency_key.map(str::to_owned));
+        self.transport.request_json(&spec).await
+    }
+
+    /// Cancel an invoice (`POST /invoices/:id/cancel`) and return it in its
+    /// new state.
+    ///
+    /// * A `queued` invoice is cancelled right away: `status` is
+    ///   [`InvoiceStatus::Cancelled`](crate::InvoiceStatus::Cancelled).
+    /// * An `authorized` invoice moves to
+    ///   [`InvoiceStatus::Cancelling`](crate::InvoiceStatus::Cancelling) while
+    ///   the Sefin processes the cancellation event.
+    /// * A `processing` invoice stays `processing` with
+    ///   `cancellation_requested_at` set; it is cancelled once authorized.
+    ///
+    /// Follow the outcome with [`get`](Self::get) (or the
+    /// `nfse.invoice.cancelled` / `nfse.invoice.cancellation_rejected`
+    /// webhooks): `Cancelled` means done; back to `Authorized` with
+    /// `last_error_code`/`last_error_message` set means the Sefin rejected it.
+    /// Repeating the request returns the current state.
+    ///
+    /// Invoices in `retry_pending`, `reconciliation_required` or
+    /// `manual_review` fail with [`CorvoError::Api`] status 409, code
+    /// `ERROR_INVOICE_NOT_CANCELLABLE`; an invalid description fails with 422.
+    ///
+    /// ```no_run
+    /// # async fn run(corvo: corvo_nfse::Corvo) -> Result<(), corvo_nfse::CorvoError> {
+    /// use corvo_nfse::{InvoiceCancelParams, InvoiceCancellationReason, InvoiceStatus};
+    ///
+    /// let params = InvoiceCancelParams::new(InvoiceCancellationReason::IssueError)
+    ///     .description("Issued with the wrong amount");
+    /// corvo.invoices().cancel("inv_123", &params).await?;
+    ///
+    /// let invoice = corvo.invoices().get("inv_123").await?;
+    /// if invoice.status == InvoiceStatus::Cancelled {
+    ///     println!("cancelled at {:?}", invoice.cancelled_at);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn cancel(
+        &self,
+        id: &str,
+        params: &InvoiceCancelParams,
+    ) -> Result<Invoice, CorvoError> {
+        let spec = RequestSpec::post(&format!("/invoices/{}/cancel", encode(id))).json(params)?;
         self.transport.request_json(&spec).await
     }
 }
