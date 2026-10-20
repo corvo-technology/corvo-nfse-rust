@@ -121,6 +121,31 @@ println!("queued {}", invoice.id);
 
 Set `options: Some(InvoiceOptions { invoice_type: Some(InvoiceType::Schedule), ..Default::default() })` with a future `competence_date` to schedule the issuance.
 
+### Cancel an invoice
+
+`cancel` takes a reason (`IssueError`, `ServiceNotProvided` or `Other`) and an optional description. To cancel an `authorized` invoice, or one still `processing`, the API requires a description of 15 to 255 characters; for a `queued` invoice it is optional.
+
+```rust
+use corvo_nfse::{InvoiceCancelParams, InvoiceCancellationReason, InvoiceStatus};
+
+let params = InvoiceCancelParams::new(InvoiceCancellationReason::IssueError)
+    .description("Issued with the wrong amount");
+let invoice = corvo.invoices().cancel("inv_…", &params).await?;
+// queued -> Cancelled right away; authorized -> Cancelling while the Sefin
+// processes it; processing -> stays Processing with cancellation_requested_at set.
+
+// Later, check the result:
+let invoice = corvo.invoices().get("inv_…").await?;
+match invoice.status {
+    InvoiceStatus::Cancelled => println!("cancelled at {:?}", invoice.cancelled_at),
+    InvoiceStatus::Cancelling => println!("still cancelling"),
+    InvoiceStatus::Authorized => println!("rejected: {:?}", invoice.last_error_message),
+    other => println!("status {}", other.as_str()),
+}
+```
+
+Invoices in `retry_pending`, `reconciliation_required` or `manual_review` fail with `CorvoError::Api` status `409` and code `ERROR_INVOICE_NOT_CANCELLABLE`. An invalid description fails with `422`. The `nfse.invoice.cancelled` and `nfse.invoice.cancellation_rejected` webhooks report the outcome. Cancelling an authorized NFS-e does not refund the credit.
+
 ### Error handling
 
 ```rust
@@ -171,7 +196,7 @@ if verify_signature(&raw_body, signature_header, "whsec_…") {
 |---|---|
 | `corvo.companies()` | `create`, `list`, `iterate`, `get`, `update`, `remove` |
 | `corvo.certificates()` | `upload`, `list`, `remove` |
-| `corvo.invoices()` | `create`, `calculate`, `list`, `iterate`, `get`, `events`, `pdf`, `xml`, `download_url`, `send_email` |
+| `corvo.invoices()` | `create`, `calculate`, `list`, `iterate`, `get`, `events`, `pdf`, `xml`, `download_url`, `send_email`, `cancel` |
 | `corvo.webhooks()` | `list`, `create`, `remove`, `test`, `.deliveries().{list, iterate, stats, retry}` |
 | `corvo.credits()` | `balance`, `plans`, `history`, `iterate_history` |
 | `corvo.billing()` | `plan`, `usage` |
