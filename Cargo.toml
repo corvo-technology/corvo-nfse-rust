@@ -1,6 +1,6 @@
 [package]
 name = "corvo-nfse"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Rust SDK for the Corvo NFS-e API: issue Brazilian service invoices, calculate taxes, verify webhooks."
