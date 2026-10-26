@@ -23,6 +23,11 @@ pub enum InvoiceStatus {
     ManualReview,
     /// Permanently failed.
     Failed,
+    /// Cancellation requested; the NFS-e cancellation event is being processed
+    /// by the Sefin.
+    Cancelling,
+    /// Cancelled (terminal).
+    Cancelled,
 }
 
 impl InvoiceStatus {
@@ -37,6 +42,8 @@ impl InvoiceStatus {
             InvoiceStatus::ReconciliationRequired => "reconciliation_required",
             InvoiceStatus::ManualReview => "manual_review",
             InvoiceStatus::Failed => "failed",
+            InvoiceStatus::Cancelling => "cancelling",
+            InvoiceStatus::Cancelled => "cancelled",
         }
     }
 }
@@ -293,6 +300,73 @@ pub struct Invoice {
     pub stage: InvoiceStage,
     /// When a scheduled invoice is released (RFC 3339); `None` for an immediate one.
     pub scheduled_for: Option<String>,
+    /// Why the invoice was cancelled, once a cancellation was requested.
+    #[serde(default)]
+    pub cancellation_reason: Option<InvoiceCancellationReason>,
+    /// Free-text cancellation description, if one was sent.
+    #[serde(default)]
+    pub cancellation_description: Option<String>,
+    /// When the invoice was cancelled (RFC 3339).
+    #[serde(default)]
+    pub cancelled_at: Option<String>,
+    /// When the cancellation was requested (RFC 3339).
+    #[serde(default)]
+    pub cancellation_requested_at: Option<String>,
+}
+
+/// Reason for cancelling an invoice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InvoiceCancellationReason {
+    /// The invoice was issued with an error (wrong amount, customer, ...).
+    IssueError,
+    /// The service was not provided.
+    ServiceNotProvided,
+    /// Any other reason; explain it in the description.
+    Other,
+}
+
+impl InvoiceCancellationReason {
+    /// The exact string the API expects on the wire.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            InvoiceCancellationReason::IssueError => "issue_error",
+            InvoiceCancellationReason::ServiceNotProvided => "service_not_provided",
+            InvoiceCancellationReason::Other => "other",
+        }
+    }
+}
+
+/// Parameters for cancelling an invoice with
+/// [`Invoices::cancel`](crate::Invoices::cancel).
+///
+/// `description` (up to 255 characters) is required by the API, with 15 to 255
+/// characters, to cancel an `authorized` invoice or one still `processing`; it
+/// is optional for a `queued` invoice. The SDK does not validate it locally.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceCancelParams {
+    /// Why the invoice is being cancelled.
+    pub reason: InvoiceCancellationReason,
+    /// Free-text explanation (15 to 255 characters when required).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+impl InvoiceCancelParams {
+    /// Cancellation with `reason` and no description.
+    pub fn new(reason: InvoiceCancellationReason) -> Self {
+        Self {
+            reason,
+            description: None,
+        }
+    }
+
+    /// Set the description.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
 }
 
 /// A status-transition event on an invoice.
