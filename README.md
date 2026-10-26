@@ -48,7 +48,9 @@ let company = corvo
     .create(&CompanyCreateParams {
         legal_name: "Empresa Exemplo Ltda".into(),
         tax_id: "11222333000181".into(),
-        tax_regime: TaxRegime::SimplesNacional,
+        tax_regime: TaxRegime::SimplesNacional, // MEI or SimplesNacional: the only regimes Corvo serves
+        simples_rate: Some("6.54".into()), // required for Simples Nacional: effective DAS rate (%)
+        simples_iss_rate: None,
         municipality_code: "3550308".into(), // IBGE code, 7 digits
         default_service_code: Some("010101".into()), // used when an invoice omits service.code
         trade_name: None,
@@ -62,6 +64,32 @@ let company = corvo
 ```
 
 In `live`, also upload the A1 certificate with `corvo.certificates().upload(...)`. The company is ready when `company.status` is `"ready"` and `company.setup_gaps` is empty.
+
+### Issue up to 50 invoices at once
+
+`create_batch` takes 1 to 50 items (they can belong to different companies). Items are checked one by one: valid ones are saved together, invalid ones come back `rejected` and are not saved. Send an `idempotency_key` per item, so repeating the batch after a timeout returns the saved ones with `replayed`. To declare a deduction from the ISS base, set `deduction` on the invoice (greater than 0 and less than `amount` minus `discount`).
+
+```rust
+use corvo_nfse::{InvoiceBatchItem, InvoiceCreateParams, InvoiceServiceInput};
+
+let item = |row: u32, amount: f64| InvoiceBatchItem {
+    invoice: InvoiceCreateParams {
+        company_tax_id: Some("11222333000181".into()),
+        service: InvoiceServiceInput { description: Some("Consultoria".into()), ..Default::default() },
+        amount,
+        competence_date: "2026-10-16".into(),
+        ..Default::default()
+    },
+    idempotency_key: Some(format!("sheet-row-{row}")),
+};
+
+let batch = corvo.invoices().create_batch(&[item(2, 150.5), item(3, 300.0)]).await?;
+for result in batch.results.iter().filter(|r| r.status == "rejected") {
+    println!("{} {:?}", result.index, result.error);
+}
+```
+
+The route allows 10 batches per minute per tenant (`429` with `Retry-After`).
 
 ### Estimate the taxes before issuing
 

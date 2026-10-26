@@ -26,7 +26,8 @@ pub use credits::{
 };
 pub use invoice::{
     CalculatedTaxAmount, CalculatedTaxes, CalculationBlocking, CalculationPendingField,
-    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCancelParams, InvoiceCancellationReason,
+    DownloadFormat, Invoice, InvoiceBatchError, InvoiceBatchItem, InvoiceBatchResult,
+    InvoiceBatchSummary, InvoiceCalculation, InvoiceCancelParams, InvoiceCancellationReason,
     InvoiceCreateParams, InvoiceCustomerAddressInput, InvoiceCustomerInput,
     InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions, InvoiceEmailResult,
     InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput, InvoiceServiceSnapshot,

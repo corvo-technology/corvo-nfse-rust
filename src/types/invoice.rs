@@ -179,9 +179,16 @@ pub struct InvoiceCreateParams {
     pub amount: f64,
     /// Competence date (`YYYY-MM-DD`).
     pub competence_date: String,
-    /// Unconditional discount in BRL, from 0 up to `amount`.
+    /// Unconditional discount in BRL, from 0 up to `amount`, at most 2 decimal
+    /// places.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discount: Option<f64>,
+    /// Deduction from the ISS base declared by the issuer, in BRL: greater than
+    /// 0 and less than `amount` minus `discount`, at most 2 decimal places (`0`
+    /// is the same as omitting it). The invoice is still issued for the full
+    /// amount; the issuer is responsible for the declared value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deduction: Option<f64>,
     /// Request the email notification (default `false`); `options.email.send`
     /// wins when set.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -254,6 +261,12 @@ pub struct Invoice {
     pub tax_snapshot: Value,
     /// Invoice amount (BRL).
     pub amount: f64,
+    /// Unconditional discount (BRL), when one was declared.
+    #[serde(default)]
+    pub discount: Option<f64>,
+    /// Deduction from the ISS base (BRL), when one was declared.
+    #[serde(default)]
+    pub deduction: Option<f64>,
     /// Currency code.
     pub currency: String,
     /// Competence date (`YYYY-MM-DD`).
@@ -367,6 +380,66 @@ impl InvoiceCancelParams {
         self.description = Some(description.into());
         self
     }
+}
+
+/// One item of [`Invoices::create_batch`](crate::Invoices::create_batch): the
+/// fields of [`InvoiceCreateParams`] plus its own idempotency key.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceBatchItem {
+    /// The invoice to issue.
+    #[serde(flatten)]
+    pub invoice: InvoiceCreateParams,
+    /// Up to 255 characters. Repeating it with the same content returns the
+    /// saved invoice with `replayed: true` instead of issuing again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+}
+
+/// Why a batch item was rejected. Rejected items are not saved.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvoiceBatchError {
+    /// Stable error code, e.g. `ERROR_VALIDATION`.
+    pub code: String,
+    /// English message meant for diagnostics.
+    pub message: String,
+    /// Field-level details, when the error has them.
+    #[serde(default)]
+    pub details: Option<Value>,
+}
+
+/// Outcome of one batch item; `index` is its position in the request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceBatchResult {
+    /// Position of the item in the request, starting at 0.
+    pub index: u32,
+    /// `accepted` or `rejected`.
+    pub status: String,
+    /// `true` when the item repeated an idempotency key already saved with the
+    /// same content.
+    #[serde(default)]
+    pub replayed: Option<bool>,
+    /// The saved invoice, when `status` is `accepted`.
+    #[serde(default)]
+    pub invoice: Option<Invoice>,
+    /// The reason, when `status` is `rejected`.
+    #[serde(default)]
+    pub error: Option<InvoiceBatchError>,
+}
+
+/// Result of [`Invoices::create_batch`](crate::Invoices::create_batch).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceBatchSummary {
+    /// Items sent.
+    pub total: u32,
+    /// Items saved.
+    pub accepted: u32,
+    /// Items rejected (not saved).
+    pub rejected: u32,
+    /// One entry per item, in the order sent.
+    pub results: Vec<InvoiceBatchResult>,
 }
 
 /// A status-transition event on an invoice.

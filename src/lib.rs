@@ -59,14 +59,15 @@ pub use types::{
     CalculatedTaxes, CalculationBlocking, CalculationPendingField, Certificate,
     CertificateUploadParams, Company, CompanyAddressInput, CompanyCreateParams,
     CompanyUpdateParams, CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction,
-    DownloadFormat, Environment, Invoice, InvoiceCalculation, InvoiceCancelParams,
-    InvoiceCancellationReason, InvoiceCreateParams, InvoiceCustomerAddressInput,
-    InvoiceCustomerInput, InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions,
-    InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput,
-    InvoiceServiceSnapshot, InvoiceStage, InvoiceStatus, InvoiceType, Paginated, Pagination,
-    PlanQuote, PlanRecommendation, QuotaStatus, TaxRegime, Webhook, WebhookCreateParams,
-    WebhookDeleteResult, WebhookDelivery, WebhookDeliveryListParams, WebhookDeliveryRetryResult,
-    WebhookDeliveryStats, WebhookTestResult, WebhookWithSecret, WEBHOOK_EVENTS,
+    DownloadFormat, Environment, Invoice, InvoiceBatchError, InvoiceBatchItem, InvoiceBatchResult,
+    InvoiceBatchSummary, InvoiceCalculation, InvoiceCancelParams, InvoiceCancellationReason,
+    InvoiceCreateParams, InvoiceCustomerAddressInput, InvoiceCustomerInput,
+    InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions, InvoiceEmailResult,
+    InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput, InvoiceServiceSnapshot,
+    InvoiceStage, InvoiceStatus, InvoiceType, Paginated, Pagination, PlanQuote, PlanRecommendation,
+    QuotaStatus, TaxRegime, Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery,
+    WebhookDeliveryListParams, WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookTestResult,
+    WebhookWithSecret, WEBHOOK_EVENTS,
 };
 pub use webhooks::verify_signature;
 
