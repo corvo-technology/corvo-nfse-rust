@@ -2,7 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Brazilian tax regime of a company.
+/// Brazilian tax regime of a company. Corvo serves only these two regimes; any
+/// other value is rejected with `422` `ERROR_TAX_REGIME_NOT_SUPPORTED`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaxRegime {
     /// Microempreendedor Individual.
@@ -11,12 +12,6 @@ pub enum TaxRegime {
     /// Simples Nacional.
     #[serde(rename = "Simples Nacional")]
     SimplesNacional,
-    /// Lucro Presumido.
-    #[serde(rename = "Lucro Presumido")]
-    LucroPresumido,
-    /// Lucro Real.
-    #[serde(rename = "Lucro Real")]
-    LucroReal,
 }
 
 impl TaxRegime {
@@ -25,8 +20,6 @@ impl TaxRegime {
         match self {
             TaxRegime::Mei => "MEI",
             TaxRegime::SimplesNacional => "Simples Nacional",
-            TaxRegime::LucroPresumido => "Lucro Presumido",
-            TaxRegime::LucroReal => "Lucro Real",
         }
     }
 }
@@ -92,6 +85,17 @@ pub struct CompanyCreateParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub special_regime: Option<String>,
+    /// Required for `Simples Nacional`, ignored for `MEI`. Effective total rate
+    /// (%) of your DAS, as in the PGDAS-D, e.g. `"6.54"` (0 to 100, at most 2
+    /// decimals).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub simples_rate: Option<String>,
+    /// `Simples Nacional` only: effective ISS rate (%) of your bracket (1.80 to
+    /// 5.00), needed when a customer withholds ISS.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub simples_iss_rate: Option<String>,
     /// Postal address.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<CompanyAddressInput>,
@@ -128,6 +132,13 @@ pub struct CompanyUpdateParams {
     /// Special tax regime note.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub special_regime: Option<String>,
+    /// New Simples rate (%), e.g. `"6.54"`. Omit to keep the current value.
+    /// Ignored for `MEI`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub simples_rate: Option<String>,
+    /// New ISS rate (%) of the Simples bracket.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub simples_iss_rate: Option<String>,
     /// Postal address.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<CompanyAddressInput>,

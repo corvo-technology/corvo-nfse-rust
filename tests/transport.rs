@@ -217,6 +217,8 @@ async fn rest_error_maps_to_api_error() {
         default_service_code: None,
         simple_national: None,
         special_regime: None,
+        simples_rate: None,
+        simples_iss_rate: None,
         address: None,
     };
     let err = corvo

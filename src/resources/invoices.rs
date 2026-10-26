@@ -7,8 +7,9 @@ use crate::resources::companies::encode;
 use crate::transport::{push_query, DownloadedFile, Paginator, RequestSpec, Unwrap};
 use crate::types::common::Paginated;
 use crate::types::invoice::{
-    DownloadFormat, Invoice, InvoiceCalculation, InvoiceCancelParams, InvoiceCreateParams,
-    InvoiceDownloadUrl, InvoiceEmailResult, InvoiceEvent, InvoiceListParams,
+    DownloadFormat, Invoice, InvoiceBatchItem, InvoiceBatchSummary, InvoiceCalculation,
+    InvoiceCancelParams, InvoiceCreateParams, InvoiceDownloadUrl, InvoiceEmailResult, InvoiceEvent,
+    InvoiceListParams,
 };
 
 /// Invoices resource, obtained via [`Corvo::invoices()`](crate::Corvo::invoices).
@@ -33,6 +34,22 @@ impl<'c> Invoices<'c> {
         let spec = RequestSpec::post("/invoices")
             .json(params)?
             .idempotency_key(idempotency_key.map(str::to_owned));
+        self.transport.request_json(&spec).await
+    }
+
+    /// Issue 1 to 50 invoices in one call (`POST /invoices/batches`), for one
+    /// company or several.
+    ///
+    /// Items are checked one by one: valid ones are saved together, invalid ones
+    /// come back `rejected` and are not saved. Match `results[].index` to the
+    /// item you sent, fix only the rejected ones and send them again. Send an
+    /// `idempotency_key` per item; the `Idempotency-Key` header is not used by
+    /// this route.
+    pub async fn create_batch(
+        &self,
+        invoices: &[InvoiceBatchItem],
+    ) -> Result<InvoiceBatchSummary, CorvoError> {
+        let spec = RequestSpec::post("/invoices/batches").json(&json!({ "invoices": invoices }))?;
         self.transport.request_json(&spec).await
     }
 
