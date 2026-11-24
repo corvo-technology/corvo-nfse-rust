@@ -105,7 +105,7 @@ impl<'c> Deliveries<'c> {
     /// Delivery stats over the last `hours` (`GET /webhooks/deliveries/stats`).
     pub async fn stats(
         &self,
-        hours: Option<u32>,
+        hours: Option<f64>,
         environment: Option<crate::types::common::Environment>,
     ) -> Result<WebhookDeliveryStats, CorvoError> {
         let mut query = Vec::new();

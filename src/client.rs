@@ -4,13 +4,23 @@ use std::env;
 use std::time::Duration;
 
 use crate::error::CorvoError;
+use crate::resources::accountant_package::AccountantPackage;
 use crate::resources::billing::Billing;
 use crate::resources::certificates::Certificates;
 use crate::resources::companies::Companies;
 use crate::resources::credits::Credits;
+use crate::resources::customers::{Cnpj, Customers};
+use crate::resources::dps_sequence::DpsSequenceResource;
+use crate::resources::fiscal_portal::FiscalPortal;
+use crate::resources::fiscal_profiles::{FiscalProfiles, ServiceTaxProfiles};
 use crate::resources::health::Health;
+use crate::resources::imports::Imports;
+use crate::resources::integrations::{IntegrationConnections, IntegrationOperations, Integrations};
+use crate::resources::invoice_package::InvoicePackage;
 use crate::resources::invoices::Invoices;
 use crate::resources::plans::Plans;
+use crate::resources::schedules::Schedules;
+use crate::resources::service_favorites::ServiceFavorites;
 use crate::resources::webhooks::Webhooks;
 use crate::transport::Transport;
 
@@ -98,6 +108,76 @@ impl Corvo {
     /// Billing resource.
     pub fn billing(&self) -> Billing<'_> {
         Billing::new(&self.transport)
+    }
+
+    /// Saved customers resource.
+    pub fn customers(&self) -> Customers<'_> {
+        Customers::new(&self.transport)
+    }
+
+    /// CNPJ lookup.
+    pub fn cnpj(&self) -> Cnpj<'_> {
+        Cnpj::new(&self.transport)
+    }
+
+    /// Favorite services of a company.
+    pub fn service_favorites(&self) -> ServiceFavorites<'_> {
+        ServiceFavorites::new(&self.transport)
+    }
+
+    /// Accountant package (monthly ZIP e-mailed to the accountant).
+    pub fn accountant_package(&self) -> AccountantPackage<'_> {
+        AccountantPackage::new(&self.transport)
+    }
+
+    /// Monthly invoice package (summary and ZIP download).
+    pub fn invoice_package(&self) -> InvoicePackage<'_> {
+        InvoicePackage::new(&self.transport)
+    }
+
+    /// Scheduled and recurring invoices.
+    pub fn schedules(&self) -> Schedules<'_> {
+        Schedules::new(&self.transport)
+    }
+
+    /// Spreadsheet imports.
+    pub fn imports(&self) -> Imports<'_> {
+        Imports::new(&self.transport)
+    }
+
+    /// Fiscal profiles of a company.
+    pub fn fiscal_profiles(&self) -> FiscalProfiles<'_> {
+        FiscalProfiles::new(&self.transport)
+    }
+
+    /// Service tax profiles of a company.
+    pub fn service_tax_profiles(&self) -> ServiceTaxProfiles<'_> {
+        ServiceTaxProfiles::new(&self.transport)
+    }
+
+    /// DPS numbering of a company.
+    pub fn dps_sequence(&self) -> DpsSequenceResource<'_> {
+        DpsSequenceResource::new(&self.transport)
+    }
+
+    /// Payment platforms Corvo can connect to.
+    pub fn integrations(&self) -> Integrations<'_> {
+        Integrations::new(&self.transport)
+    }
+
+    /// Connections with payment platforms.
+    pub fn integration_connections(&self) -> IntegrationConnections<'_> {
+        IntegrationConnections::new(&self.transport)
+    }
+
+    /// Operations (sales) of integrations.
+    pub fn integration_operations(&self) -> IntegrationOperations<'_> {
+        IntegrationOperations::new(&self.transport)
+    }
+
+    /// Status of the national NFS-e portal.
+    pub fn fiscal_portal(&self) -> FiscalPortal<'_> {
+        FiscalPortal::new(&self.transport)
     }
 
     /// Health checks (no API key required).

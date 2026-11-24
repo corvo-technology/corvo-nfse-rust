@@ -7,7 +7,7 @@ use crate::types::common::Environment;
 
 /// Every event a webhook can subscribe to. `webhook.test` is only sent by
 /// `webhooks().test()` and cannot be subscribed.
-pub const WEBHOOK_EVENTS: [&str; 11] = [
+pub const WEBHOOK_EVENTS: [&str; 12] = [
     "nfse.invoice.authorized",
     "nfse.invoice.rejected",
     "nfse.invoice.failed",
@@ -19,6 +19,7 @@ pub const WEBHOOK_EVENTS: [&str; 11] = [
     "nfse.invoice.fiscal_discrepancy",
     "nfse.invoice.cancelled",
     "nfse.invoice.cancellation_rejected",
+    "nfse.invoice.taker_rejected",
 ];
 
 /// A registered webhook endpoint.
@@ -33,6 +34,10 @@ pub struct Webhook {
     pub events: Vec<String>,
     /// Whether the endpoint is active.
     pub active: bool,
+    /// Environment the webhook is tied to (`test` or `live`): it only receives
+    /// that key's events.
+    #[serde(default)]
+    pub environment: Option<Environment>,
     /// Creation timestamp (RFC 3339).
     pub created_at: String,
     /// Last update timestamp (RFC 3339).
@@ -54,6 +59,9 @@ pub struct WebhookWithSecret {
     pub events: Vec<String>,
     /// Whether the endpoint is active.
     pub active: bool,
+    /// Environment the webhook is tied to (`test` or `live`).
+    #[serde(default)]
+    pub environment: Option<Environment>,
     /// Creation timestamp (RFC 3339).
     pub created_at: String,
     /// Last update timestamp (RFC 3339).
@@ -89,22 +97,29 @@ pub struct WebhookDelivery {
     /// Target URL.
     pub url: String,
     /// The JSON payload that was sent.
-    pub payload: Value,
+    #[serde(default)]
+    pub payload: Option<Value>,
     /// HTTP status code returned by the target, if any.
+    #[serde(default)]
     pub status_code: Option<i64>,
     /// Response body returned by the target, if any.
-    pub response_body: Option<Value>,
+    #[serde(default)]
+    pub response_body: Option<String>,
     /// Error message when delivery failed.
+    #[serde(default)]
     pub error_message: Option<String>,
-    /// Delivery status.
+    /// Delivery status: `pending`, `sent`, `delayed`, `failed` or `manual_retry`.
     pub status: String,
     /// Delivery duration in milliseconds, if measured.
+    #[serde(default)]
     pub duration_ms: Option<i64>,
     /// Number of retries attempted so far.
     pub retry_count: i64,
     /// When the next retry is scheduled (RFC 3339).
+    #[serde(default)]
     pub next_retry_at: Option<String>,
     /// Last error recorded, if any.
+    #[serde(default)]
     pub last_error: Option<String>,
     /// Creation timestamp (RFC 3339).
     pub created_at: String,
@@ -127,12 +142,12 @@ pub struct WebhookDeliveryStats {
 }
 
 /// Filters for listing webhook deliveries.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebhookDeliveryListParams {
-    /// Only deliveries from the last N hours.
+    /// Only deliveries from the last N hours (at least 0.01).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hours: Option<u32>,
+    pub hours: Option<f64>,
     /// Only deliveries in this environment.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<Environment>,
@@ -153,11 +168,17 @@ pub struct WebhookDeleteResult {
 }
 
 /// Result of sending a test event to a webhook.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebhookTestResult {
-    /// Whether the test delivery was dispatched.
+    /// Whether the test delivery reached the target.
     pub sent: bool,
+    /// Why it failed, when `sent` is `false`.
+    #[serde(default)]
+    pub error: Option<String>,
+    /// HTTP status the target answered with, when it answered.
+    #[serde(default)]
+    pub status_code: Option<i64>,
 }
 
 /// Result of retrying a webhook delivery.

@@ -76,20 +76,19 @@ async fn returns_the_invoice_from_the_data_envelope() {
                 "companyId": "c_1",
                 "tenantId": "ten_1",
                 "environment": "test",
-                "documentKeyVersion": 1,
                 "emailSnapshot": { "send": true },
                 "externalId": null,
                 "idempotencyKey": null,
                 "status": "authorized",
                 "customerSnapshot": { "name": "Customer", "taxId": "52998224725" },
-                "serviceSnapshot": { "code": "0107" },
+                "serviceSnapshot": { "code": "0107", "description": "S", "municipalityCode": "3550308" },
                 "taxSnapshot": {},
                 "amount": 10.5,
                 "currency": "BRL",
                 "competenceDate": "2026-10-13",
                 "dpsId": null, "dpsSeries": null, "dpsNumber": null,
                 "accessKey": null, "nfseNumber": null,
-                "fiscalProvider": null, "fiscalSchemaVersion": null,
+                "fiscalProvider": "nacional", "fiscalSchemaVersion": "1.01",
                 "issuedAt": null, "authorizedAt": null,
                 "lastErrorCode": null, "lastErrorMessage": null, "lastErrorProvider": null,
                 "documentsReadyAt": null,
@@ -97,7 +96,7 @@ async fn returns_the_invoice_from_the_data_envelope() {
                 "createdAt": "2026-10-13T00:00:00Z",
                 "updatedAt": "2026-10-13T00:00:00Z",
                 "documentsStatus": "pending",
-                "emailStatus": "pending",
+                "emailStatus": null,
                 "stage": "authorized"
             }
         })))
@@ -392,23 +391,22 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
             "customer": { "name": "Customer", "taxId": "52998224725" },
             "service": { "code": "0107" }
         })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+        .respond_with(ResponseTemplate::new(202).set_body_json(json!({
             "data": {
-                "id": "inv_1", "companyId": "c_1", "tenantId": "ten_1",
-                "environment": "test", "documentKeyVersion": 1,
+                "id": "inv_1", "companyId": "c_1", "tenantId": "ten_1", "environment": "test",
                 "emailSnapshot": { "send": false }, "externalId": null,
                 "idempotencyKey": "idem_1", "status": "queued",
-                "customerSnapshot": { "name": "Customer" }, "serviceSnapshot": { "code": "0107" },
+                "customerSnapshot": { "name": "Customer" }, "serviceSnapshot": { "code": "0107", "description": "S", "municipalityCode": "3550308" },
                 "taxSnapshot": {}, "amount": 10.5, "currency": "BRL",
                 "competenceDate": "2026-10-13",
                 "dpsId": null, "dpsSeries": null, "dpsNumber": null,
                 "accessKey": null, "nfseNumber": null,
-                "fiscalProvider": null, "fiscalSchemaVersion": null,
+                "fiscalProvider": "nacional", "fiscalSchemaVersion": "1.01",
                 "issuedAt": null, "authorizedAt": null,
                 "lastErrorCode": null, "lastErrorMessage": null, "lastErrorProvider": null,
                 "documentsReadyAt": null, "lastEmailStatus": null, "lastEmailSentAt": null,
                 "createdAt": "2026-10-13T00:00:00Z", "updatedAt": "2026-10-13T00:00:00Z",
-                "documentsStatus": "pending", "emailStatus": "pending", "stage": "pending"
+                "documentsStatus": "pending", "emailStatus": null, "stage": "pending"
             }
         })))
         .mount(&server)
@@ -421,7 +419,7 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
         external_id: None,
         customer: Some(InvoiceCustomerInput {
             name: Some("Customer".into()),
-            tax_id: "52998224725".into(),
+            tax_id: Some("52998224725".into()),
             ..Default::default()
         }),
         service: InvoiceServiceInput {
@@ -436,7 +434,9 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
         .invoices()
         .create(&params, Some("idem_1"))
         .await
-        .expect("create invoice");
+        .expect("create invoice")
+        .into_invoice()
+        .expect("an invoice, not a schedule");
     assert_eq!(invoice.id, "inv_1");
     assert_eq!(invoice.status, InvoiceStatus::Queued);
 }
@@ -465,6 +465,7 @@ async fn invoice_list_query_params_pass_through() {
             from: None,
             to: None,
             external_id: None,
+            customer_tax_id: None,
             limit: Some(3),
             cursor: None,
         })

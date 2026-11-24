@@ -51,24 +51,13 @@ pub use resources::companies::CompanyListParams;
 pub use resources::credits::CreditPlanListParams;
 pub use resources::webhooks::WebhookListParams;
 pub use resources::{
-    Billing, Certificates, Companies, Credits, Deliveries, Health, Invoices, Plans, Webhooks,
+    AccountantPackage, Billing, Certificates, Cnpj, Companies, Credits, Customers, Deliveries,
+    DpsSequenceResource, FiscalPortal, FiscalProfiles, Health, Imports, IntegrationConnections,
+    IntegrationOperations, Integrations, InvoicePackage, Invoices, Plans, Schedules,
+    ServiceFavorites, ServiceTaxProfiles, Webhooks,
 };
 pub use transport::{DownloadedFile, Paginator};
-pub use types::{
-    BillingPlanInfo, BillingPlanResponse, BillingSubscription, BillingUsage, CalculatedTaxAmount,
-    CalculatedTaxes, CalculationBlocking, CalculationPendingField, Certificate,
-    CertificateUploadParams, Company, CompanyAddressInput, CompanyCreateParams,
-    CompanyUpdateParams, CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction,
-    DownloadFormat, Environment, Invoice, InvoiceBatchError, InvoiceBatchItem, InvoiceBatchResult,
-    InvoiceBatchSummary, InvoiceCalculation, InvoiceCancelParams, InvoiceCancellationReason,
-    InvoiceCreateParams, InvoiceCustomerAddressInput, InvoiceCustomerInput,
-    InvoiceCustomerSnapshot, InvoiceDownloadUrl, InvoiceEmailOptions, InvoiceEmailResult,
-    InvoiceEvent, InvoiceListParams, InvoiceOptions, InvoiceServiceInput, InvoiceServiceSnapshot,
-    InvoiceStage, InvoiceStatus, InvoiceType, Paginated, Pagination, PlanQuote, PlanRecommendation,
-    QuotaStatus, TaxRegime, Webhook, WebhookCreateParams, WebhookDeleteResult, WebhookDelivery,
-    WebhookDeliveryListParams, WebhookDeliveryRetryResult, WebhookDeliveryStats, WebhookTestResult,
-    WebhookWithSecret, WEBHOOK_EVENTS,
-};
+pub use types::*;
 pub use webhooks::verify_signature;
 
 /// The SDK version (kept in sync with `Cargo.toml`).

@@ -53,8 +53,9 @@ fn rejects_malformed_headers() {
 
 #[test]
 fn webhook_events_list_is_complete() {
-    assert_eq!(WEBHOOK_EVENTS.len(), 11);
+    assert_eq!(WEBHOOK_EVENTS.len(), 12);
     assert!(WEBHOOK_EVENTS.contains(&"nfse.invoice.fiscal_discrepancy"));
     assert!(!WEBHOOK_EVENTS.contains(&"webhook.test"));
     assert!(WEBHOOK_EVENTS.contains(&"nfse.invoice.authorized"));
+    assert!(WEBHOOK_EVENTS.contains(&"nfse.invoice.taker_rejected"));
 }

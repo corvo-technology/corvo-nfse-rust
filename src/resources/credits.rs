@@ -1,9 +1,11 @@
-//! Credits resource: 4 ops.
+//! Credits resource: 5 ops.
 
 use crate::error::CorvoError;
 use crate::transport::{push_query, Paginator, RequestSpec, Unwrap};
 use crate::types::common::Paginated;
-use crate::types::credits::{CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction};
+use crate::types::credits::{
+    CreditBalance, CreditHistoryParams, CreditPlan, CreditTransaction, PurchasePreview,
+};
 
 /// Filters for listing credit plans.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -27,6 +29,17 @@ impl<'c> Credits<'c> {
     /// Current credit balance (`GET /credits`).
     pub async fn balance(&self) -> Result<CreditBalance, CorvoError> {
         let spec = RequestSpec::get("/credits");
+        self.transport.request_json(&spec).await
+    }
+
+    /// Price a one-off purchase of `units` notes (`GET /credits/purchase/preview`).
+    ///
+    /// R$ 0,99 each, at least 3 notes, whole numbers. Buying is done in the
+    /// dashboard.
+    pub async fn preview_purchase(&self, units: u32) -> Result<PurchasePreview, CorvoError> {
+        let mut query = Vec::new();
+        push_query(&mut query, "units", Some(units.to_string()));
+        let spec = RequestSpec::get("/credits/purchase/preview").query(query);
         self.transport.request_json(&spec).await
     }
 

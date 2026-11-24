@@ -44,3 +44,10 @@ pub struct Paginated<T> {
     /// Pagination metadata for the page.
     pub pagination: Pagination,
 }
+
+/// Answer of the delete routes that return `{ deleted: true }`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Deleted {
+    /// Always `true`.
+    pub deleted: bool,
+}
