@@ -135,9 +135,6 @@ pub struct CompanyUpdateParams {
     /// Tax regime.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tax_regime: Option<TaxRegime>,
-    /// New CNPJ.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tax_id: Option<String>,
     /// Whether the company is enrolled in Simples Nacional.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub simple_national: Option<bool>,
@@ -167,6 +164,7 @@ pub struct Company {
     /// Registered legal name.
     pub legal_name: String,
     /// Trade name, if set.
+    #[serde(default)]
     pub trade_name: Option<String>,
     /// CNPJ, digits only.
     pub tax_id: String,

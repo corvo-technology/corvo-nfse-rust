@@ -65,7 +65,10 @@ impl<'c> Imports<'c> {
 
     /// Emit every valid row of the import (`POST /imports/:id/emit`).
     pub async fn emit(&self, id: &str, params: &ImportEmitParams) -> Result<ImportJob, CorvoError> {
-        let spec = RequestSpec::post(&format!("/imports/{}/emit", encode(id))).json(params)?;
+        let mut spec = RequestSpec::post(&format!("/imports/{}/emit", encode(id)));
+        if params.send_email.is_some() {
+            spec = spec.json(params)?;
+        }
         self.transport.request_json(&spec).await
     }
 

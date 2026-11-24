@@ -2,7 +2,7 @@
 
 ## 0.3.0
 
-Aligns the SDK with API contract 0.3.0 (92 operations).
+Aligns the SDK with API contract 0.3.0 (94 operations).
 
 ### Breaking
 
@@ -20,12 +20,19 @@ Aligns the SDK with API contract 0.3.0 (92 operations).
 
 ### Added
 
+- Public plan prices, no API key needed: `plans().list(limit, cursor, cycle)` and `plans().get(slug, cycle)` return `PlanPrice` (`monthly_equivalent_cents`, `charge_total_cents`; `cycle` is `monthly` or `annual`). `PlanQuote` is replaced by `PlanPrice`.
+
 - Resources: `customers()`, `cnpj()`, `service_favorites()`, `accountant_package()`, `invoice_package()`, `schedules()`, `imports()` (multipart upload, template and errors CSV), `fiscal_profiles()`, `service_tax_profiles()`, `dps_sequence()`, `integrations()`, `integration_connections()`, `integration_operations()`, `fiscal_portal()`.
 - `invoices()`: `substitute`, `overview`, `review`; `customer_tax_id` filter on `list`; `purchase_order`, `notes`, `options.recurrence` and `customer.foreign` on create; new invoice fields `substitutes_invoice_id`, `substitution_description`, `portal_flag`.
 - `credits().preview_purchase(units)` (`GET /credits/purchase/preview`).
 - `tests/contract_coverage.rs` checks every operationId of the vendored `spec/openapi.json`.
 
 ### Changed
+
+- `invoice_package().summary` returns `total` as a decimal `String` (`"1234.50"`), not a number.
+- `CompanyUpdateParams.tax_id` is removed: the CNPJ cannot be changed.
+- `invoices().send_email` without an address and `imports().emit` without `send_email` send no body.
+- Nullable fields of the contract (company address, trade name, rates; invoice e-mail status, cancellation reason, portal flag; calculation `classification`, `applicability`, `calculation`) deserialize as `None`/null. `error.details` of a batch result can be a list or an object.
 
 - Version, `User-Agent` and `VERSION` are `0.3.0`.
 - `Transport` supports `PUT`; downloads can set `Accept` (ZIP, CSV).

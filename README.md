@@ -275,7 +275,7 @@ if verify_signature(&raw_body, signature_header, "whsec_…") {
 
 ## Resources
 
-All 92 operations of the contract are covered (`tests/contract_coverage.rs` checks them against `spec/openapi.json`).
+All 94 operations of the contract are covered (`tests/contract_coverage.rs` checks them against `spec/openapi.json`).
 
 | Namespace | Operations |
 |---|---|
@@ -293,7 +293,7 @@ All 92 operations of the contract are covered (`tests/contract_coverage.rs` chec
 | `corvo.credits()` | `balance`, `plans`, `history`, `iterate_history`, `preview_purchase` |
 | `corvo.billing()` | `plan`, `usage` |
 | `corvo.fiscal_portal()` | `status` |
-| `corvo.plans()` | `list`, `get`, `quote` (public price catalog, outside the contract) |
+| `corvo.plans()` | `list`, `get` (public price catalog, no API key), `quote` (outside the contract) |
 | `corvo.health()` | `live`, `ready` |
 
 Changing plans and the billing portal exist only in the dashboard, so they are not in the SDK.

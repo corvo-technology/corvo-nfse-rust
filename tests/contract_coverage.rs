@@ -13,6 +13,8 @@ use serde_json::Value;
 
 /// (operationId, method, path, `resource.fn`)
 const IMPLEMENTED: &[(&str, &str, &str, &str)] = &[
+    ("plans_list", "GET", "/plans", "plans.list"),
+    ("plans_get", "GET", "/plans/{slug}", "plans.get"),
     (
         "accountantPackage_get",
         "GET",
@@ -487,9 +489,9 @@ fn spec_operations() -> Vec<(String, String, String)> {
 }
 
 #[test]
-fn spec_is_contract_0_3_0_with_92_operations() {
+fn spec_is_contract_0_3_0_with_94_operations() {
     assert_eq!(spec()["info"]["version"], "0.3.0");
-    assert_eq!(spec_operations().len(), 92);
+    assert_eq!(spec_operations().len(), 94);
 }
 
 #[test]

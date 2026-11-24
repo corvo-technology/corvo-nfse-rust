@@ -589,13 +589,25 @@ async fn plans_catalog_list_get_and_quote() {
     Mock::given(method("GET"))
         .and(path("/v1/plans"))
         .and(query_param("limit", "5"))
+        .and(query_param("cycle", "annual"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{
-                "slug": "developer", "name": "Developer", "monthlyAllowance": 200,
-                "basePriceCents": 2990, "perCreditOverageCents": 15,
-                "monthlyTotalCents": 2990, "currency": "BRL"
+                "slug": "solo", "name": "Solo", "monthlyAllowance": 200,
+                "basePriceCents": 2990, "monthlyEquivalentCents": 2490,
+                "chargeTotalCents": 29880, "currency": "BRL"
             }],
             "pagination": { "limit": 5, "hasMore": false, "nextCursor": null }
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/plans/solo"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {
+                "slug": "solo", "name": "Solo", "monthlyAllowance": 200,
+                "basePriceCents": 2990, "monthlyEquivalentCents": 2490,
+                "chargeTotalCents": 29880, "currency": "BRL"
+            }
         })))
         .mount(&server)
         .await;
@@ -620,8 +632,15 @@ async fn plans_catalog_list_get_and_quote() {
         .await;
 
     let corvo = client_for(&server);
-    let page = corvo.plans().list(Some(5), None).await.expect("list");
-    assert_eq!(page.data[0].slug, "developer");
+    let page = corvo
+        .plans()
+        .list(Some(5), None, Some("annual"))
+        .await
+        .expect("list");
+    assert_eq!(page.data[0].slug, "solo");
+    assert_eq!(page.data[0].charge_total_cents, 29880);
+    let one = corvo.plans().get("solo", None).await.expect("get");
+    assert_eq!(one.monthly_equivalent_cents, 2490);
     let quote = corvo.plans().quote(20000).await.expect("quote").unwrap();
     assert_eq!(quote.recommended_plan, "volume");
     assert_eq!(quote.total_estimated_cents, 179990);

@@ -438,7 +438,7 @@ async fn invoice_package_summary_and_download() {
         &format!("{p}/summary"),
         200,
         json!({ "data": { "companyName": "Acme", "companyTaxId": "11222333000181",
-            "count": 4, "limit": 500, "month": "2026-10", "total": 100.5 } }),
+            "count": 4, "limit": 500, "month": "2026-10", "total": "1234.50" } }),
     )
     .await;
     let s = corvo
@@ -447,6 +447,7 @@ async fn invoice_package_summary_and_download() {
         .await
         .unwrap();
     assert_eq!(s.count, 4);
+    assert_eq!(s.total, "1234.50");
     assert_eq!(query(&sent(&server).await.0)["month"], "2026-10");
 
     let server = MockServer::start().await;
@@ -646,6 +647,19 @@ async fn invoices_send_email_optional_destination_and_idempotency() {
 }
 
 #[tokio::test]
+async fn invoices_send_email_without_destination_sends_no_body() {
+    let (server, corvo) = setup(
+        "POST",
+        &format!("/v1/invoices/{UUID}/email"),
+        202,
+        json!({ "data": { "emailId": "e1", "status": "queued" } }),
+    )
+    .await;
+    corvo.invoices().send_email(UUID, None, None).await.unwrap();
+    assert!(sent(&server).await.0.body.is_empty());
+}
+
+#[tokio::test]
 async fn invoices_list_filters_by_customer_tax_id() {
     let (server, corvo) = setup("GET", "/v1/invoices", 200, page(json!([]), None)).await;
     corvo
@@ -683,6 +697,25 @@ async fn invoices_calculate_unwraps_the_data_envelope() {
     assert_eq!(c.status, "ready");
     assert_eq!(c.withholdings[0].tax, "ISS");
     assert_eq!(c.trace[0].duration_ms, 1.5);
+}
+
+#[tokio::test]
+async fn invoices_calculate_accepts_null_sections() {
+    let (_s, corvo) = setup(
+        "POST",
+        "/v1/invoices/calculate",
+        200,
+        json!({ "data": { "status": "blocked", "taxRegime": null, "classification": null,
+            "applicability": null, "calculation": null, "blocking": null } }),
+    )
+    .await;
+    let c = corvo
+        .invoices()
+        .calculate(&InvoiceCreateParams::default())
+        .await
+        .unwrap();
+    assert_eq!(c.status, "blocked");
+    assert!(c.classification.is_null() && c.applicability.is_null() && c.calculation.is_null());
 }
 
 #[tokio::test]
@@ -876,6 +909,20 @@ async fn imports_list_get_emit_discard() {
         .await
         .unwrap();
     assert_eq!(sent(&server).await.1, json!({ "sendEmail": true }));
+
+    let (server, corvo) = setup(
+        "POST",
+        &format!("{p}/emit"),
+        202,
+        json!({ "data": import_job() }),
+    )
+    .await;
+    corvo
+        .imports()
+        .emit(UUID, &ImportEmitParams::default())
+        .await
+        .unwrap();
+    assert!(sent(&server).await.0.body.is_empty());
 
     let (server, corvo) = setup("DELETE", &p, 204, Value::Null).await;
     corvo.imports().discard(UUID).await.unwrap();

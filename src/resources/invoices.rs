@@ -1,6 +1,6 @@
 //! Invoices resource.
 
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::error::CorvoError;
 use crate::resources::companies::encode;
@@ -106,8 +106,7 @@ impl<'c> Invoices<'c> {
         &self,
         params: &InvoiceCreateParams,
     ) -> Result<InvoiceCalculation, CorvoError> {
-        // The controller answers `{ data }`, although openapi.json shows the
-        // estimate unwrapped.
+        // The answer is `{ data: InvoiceCalculation }`; the transport unwraps it.
         let spec = RequestSpec::post("/invoices/calculate").json(params)?;
         self.transport.request_json(&spec).await
     }
@@ -189,13 +188,11 @@ impl<'c> Invoices<'c> {
         email: Option<&str>,
         idempotency_key: Option<&str>,
     ) -> Result<InvoiceEmailResult, CorvoError> {
-        let body: Value = match email {
-            Some(email) => json!({ "email": email }),
-            None => json!({}),
-        };
-        let spec = RequestSpec::post(&format!("/invoices/{}/email", encode(id)))
-            .json(&body)?
-            .idempotency_key(idempotency_key.map(str::to_owned));
+        let mut spec = RequestSpec::post(&format!("/invoices/{}/email", encode(id)));
+        if let Some(email) = email {
+            spec = spec.json(&json!({ "email": email }))?;
+        }
+        let spec = spec.idempotency_key(idempotency_key.map(str::to_owned));
         self.transport.request_json(&spec).await
     }
 

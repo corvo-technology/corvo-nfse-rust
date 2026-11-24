@@ -1119,8 +1119,9 @@ pub struct PackageSummary {
     pub limit: i64,
     /// Month (`YYYY-MM`).
     pub month: String,
-    /// Total amount in BRL.
-    pub total: f64,
+    /// Sum of the gross amount of the authorized notes, in BRL, as a decimal
+    /// string with two places (for example `"1234.50"`).
+    pub total: String,
 }
 
 /// A part of the month package (`include`).

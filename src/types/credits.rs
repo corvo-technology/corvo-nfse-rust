@@ -130,25 +130,23 @@ pub struct CreditHistoryParams {
     pub cursor: Option<String>,
 }
 
-/// Public price catalog entry (`GET /plans`): prices in centavos, monthly cycle only.
+/// Public price of a plan (`GET /plans`, `GET /plans/{slug}`): prices in
+/// centavos, for the chosen billing cycle. No API key is needed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlanQuote {
-    /// Plan slug (`free`, `solo`, `equipe`, `empresa` or `escala`).
-    ///
-    /// The public catalog (`/plans`) is not part of the API contract; the plan
-    /// data a key can read is in `billing().plan()` and `credits().plans()`.
+pub struct PlanPrice {
+    /// Plan slug (`solo`, `equipe`, `empresa` or `escala`).
     pub slug: String,
     /// Display name.
     pub name: String,
-    /// Credits included per month.
+    /// Notes included per month.
     pub monthly_allowance: i64,
-    /// Base monthly price in centavos.
+    /// Full monthly price in centavos.
     pub base_price_cents: i64,
-    /// Price of each credit above the allowance, in centavos.
-    pub per_credit_overage_cents: i64,
-    /// Monthly price in centavos.
-    pub monthly_total_cents: i64,
+    /// Price per month in the chosen cycle (the annual cycle is discounted), in centavos.
+    pub monthly_equivalent_cents: i64,
+    /// What is charged at once for the chosen cycle, in centavos.
+    pub charge_total_cents: i64,
     /// Currency code (`BRL`).
     pub currency: String,
 }
