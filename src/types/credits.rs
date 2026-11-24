@@ -3,28 +3,41 @@
 use serde::{Deserialize, Serialize};
 
 /// Current credit balance of the tenant.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreditBalance {
-    /// Owning tenant id.
-    pub tenant_id: String,
-    /// Remaining credits.
-    pub balance: f64,
-    /// Billable overage units accrued this period.
-    pub overage_units: i64,
-    /// Overage amount in cents.
-    pub overage_amount_cents: i64,
-    /// Hard limit on overage, in credits; `None` for unlimited.
-    pub hard_limit: Option<i64>,
+    /// Notes left: the plan notes left plus the loose notes bought
+    /// separately (the plan notes of a lapsed plan count 0).
+    pub balance: i64,
+    /// Plan notes left in the period.
+    pub plan_remaining: i64,
+    /// Loose notes (avulso) bought separately.
+    pub avulso_balance: i64,
+    /// Hard limit of notes.
+    pub hard_limit: i64,
+}
+
+/// Price of a one-off purchase of notes (`GET /credits/purchase/preview`).
+/// Buying is done in the dashboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PurchasePreview {
+    /// Notes priced.
+    pub units: i64,
+    /// Price of each note in centavos.
+    pub unit_price_cents: i64,
+    /// Total in centavos.
+    pub total_cents: i64,
 }
 
 /// A purchasable (or current) plan.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreditPlan {
     /// Unique id.
     pub id: String,
-    /// Stable plan slug.
+    /// Plan slug: `free`, `solo`, `equipe`, `empresa` or `escala` (plus
+    /// `self-hosted` on a self-hosted instance). Treat it as an open string.
     pub slug: String,
     /// Display name.
     pub name: String,
@@ -39,7 +52,7 @@ pub struct CreditPlan {
     /// Price of one credit unit in cents.
     pub credit_unit_price_cents: i64,
     /// Sustained throughput in requests per second.
-    pub throughput_rps: i64,
+    pub throughput_rps: f64,
     /// Whether the plan includes webhooks.
     pub includes_webhooks: bool,
     /// Whether the plan includes XML download.
@@ -70,7 +83,7 @@ pub struct CreditTransaction {
     /// Transaction type.
     pub r#type: String,
     /// Amount in credits.
-    pub amount: f64,
+    pub amount: i64,
     /// Description, if any.
     #[serde(default)]
     pub description: Option<String>,
@@ -98,6 +111,9 @@ pub struct CreditTransaction {
     /// Related transaction id, if any.
     #[serde(default)]
     pub related_transaction_id: Option<String>,
+    /// Extra data of the transaction (free-form).
+    #[serde(default)]
+    pub metadata: Option<serde_json::Value>,
     /// Creation timestamp (RFC 3339).
     pub created_at: String,
 }
@@ -114,22 +130,23 @@ pub struct CreditHistoryParams {
     pub cursor: Option<String>,
 }
 
-/// Public price catalog entry (`GET /plans`): prices in centavos, monthly cycle only.
+/// Public price of a plan (`GET /plans`, `GET /plans/{slug}`): prices in
+/// centavos, for the chosen billing cycle. No API key is needed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlanQuote {
-    /// Plan slug (`free`, `developer`, `growth`, `scale` or `volume`).
+pub struct PlanPrice {
+    /// Plan slug (`solo`, `equipe`, `empresa` or `escala`).
     pub slug: String,
     /// Display name.
     pub name: String,
-    /// Credits included per month.
+    /// Notes included per month.
     pub monthly_allowance: i64,
-    /// Base monthly price in centavos.
+    /// Full monthly price in centavos.
     pub base_price_cents: i64,
-    /// Price of each credit above the allowance, in centavos.
-    pub per_credit_overage_cents: i64,
-    /// Monthly price in centavos.
-    pub monthly_total_cents: i64,
+    /// Price per month in the chosen cycle (the annual cycle is discounted), in centavos.
+    pub monthly_equivalent_cents: i64,
+    /// What is charged at once for the chosen cycle, in centavos.
+    pub charge_total_cents: i64,
     /// Currency code (`BRL`).
     pub currency: String,
 }

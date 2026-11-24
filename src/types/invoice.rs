@@ -62,20 +62,60 @@ pub enum InvoiceStage {
     Completed,
     /// Terminal failure.
     Failed,
+    /// Cancelled.
+    Cancelled,
+}
+
+/// Document generation status of an invoice (`documentsStatus`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentsStatus {
+    /// PDF/XML not generated yet.
+    Pending,
+    /// PDF/XML ready to download.
+    Ready,
+}
+
+/// E-mail delivery status of an invoice (`emailStatus`, `lastEmailStatus`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailStatus {
+    /// Waiting to be sent.
+    Queued,
+    /// Sent.
+    Sent,
+    /// Failed.
+    Failed,
+}
+
+/// Flag set from the national portal (`portalFlag`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PortalFlag {
+    /// The customer rejected the invoice on the portal.
+    TakerRejected,
+    /// The portal blocked the invoice.
+    Blocked,
 }
 
 /// Customer (taker) input for issuing an invoice.
 ///
-/// When a customer is sent, `tax_id` (CPF or CNPJ) is required; leave
-/// [`InvoiceCreateParams::customer`] as `None` for an invoice without one.
+/// A Brazilian customer is identified by `tax_id` (CPF or CNPJ); a customer
+/// outside Brazil by `foreign` (it cannot be combined with `tax_id` or
+/// `address`, and then `name` is required). `name` may be omitted when the
+/// customer was already saved: it is filled from the CPF/CNPJ.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceCustomerInput {
     /// Customer CPF/CNPJ.
-    pub tax_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tax_id: Option<String>,
     /// Customer full name or company name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Customer outside Brazil.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foreign: Option<ForeignCustomer>,
     /// Customer email; required when the invoice must be emailed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
@@ -103,6 +143,67 @@ pub struct InvoiceCustomerAddressInput {
     /// Country name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub country: Option<String>,
+    /// IBGE municipality code (7 digits).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub municipality_code: Option<String>,
+}
+
+/// Why a foreign customer has no tax id (`noTaxIdReason`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NoTaxIdReason {
+    /// The customer is exempt.
+    Exempt,
+    /// A tax id is not required.
+    NotRequired,
+}
+
+/// A customer outside Brazil. Send either `tax_id` (the foreign NIF) or
+/// `no_tax_id_reason`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForeignCustomer {
+    /// Foreign tax id (up to 40 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tax_id: Option<String>,
+    /// Why there is no tax id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub no_tax_id_reason: Option<NoTaxIdReason>,
+    /// Country code.
+    pub country: String,
+    /// Postal code (up to 11 characters).
+    pub postal_code: String,
+    /// City (up to 60 characters).
+    pub city: String,
+    /// Region or state (up to 60 characters).
+    pub region: String,
+    /// Street (up to 255 characters).
+    pub street: String,
+    /// Number (up to 60 characters).
+    pub number: String,
+    /// District (up to 60 characters).
+    pub district: String,
+    /// Complement (up to 156 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub complement: Option<String>,
+}
+
+/// Fiscal classification override of a service (`service.fiscal`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceFiscal {
+    /// IBS/CBS class code (6 digits).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class_code: Option<String>,
+    /// CST (3 digits).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cst: Option<String>,
+    /// NBS code (9 digits).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nbs_code: Option<String>,
+    /// Operation indicator (6 digits).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_indicator: Option<String>,
 }
 
 /// Service description for an invoice. Every field is optional.
@@ -120,6 +221,12 @@ pub struct InvoiceServiceInput {
     /// Human-readable service description; defaults to the name of the code.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Fiscal classification override.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fiscal: Option<ServiceFiscal>,
+    /// Saved service tax profile to use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_profile_id: Option<String>,
 }
 
 /// When an invoice is issued.
@@ -128,9 +235,38 @@ pub enum InvoiceType {
     /// Issue right away (the default).
     #[serde(rename = "IMMEDIATE")]
     Immediate,
-    /// Issue on the (future) competence date.
+    /// Issue once, on the (future) competence date. Creates a schedule, not
+    /// an invoice.
     #[serde(rename = "SCHEDULE")]
     Schedule,
+    /// Issue repeatedly, see [`RecurrenceOptions`]. Creates a schedule.
+    #[serde(rename = "RECURRING")]
+    Recurring,
+}
+
+/// How often a schedule runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Frequency {
+    /// Every week.
+    #[serde(rename = "WEEKLY")]
+    Weekly,
+    /// Every two weeks.
+    #[serde(rename = "BIWEEKLY")]
+    Biweekly,
+    /// Every month.
+    #[serde(rename = "MONTHLY")]
+    Monthly,
+}
+
+/// Recurrence of an invoice with `options.type` `RECURRING`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecurrenceOptions {
+    /// How often it repeats.
+    pub frequency: Frequency,
+    /// Last day (`YYYY-MM-DD`) it can run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ends_on: Option<String>,
 }
 
 /// Per-invoice option flags.
@@ -140,10 +276,14 @@ pub struct InvoiceOptions {
     /// Email delivery behavior.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<InvoiceEmailOptions>,
-    /// `Schedule` with a future competence date schedules the issuance (up to
-    /// 15 days ahead by default).
+    /// `Schedule` or `Recurring` create a schedule instead of an invoice; the
+    /// competence date is then the first run and must be from tomorrow on
+    /// (up to 15 days ahead, 31 for `Recurring`).
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub invoice_type: Option<InvoiceType>,
+    /// Required for `Recurring`, refused otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recurrence: Option<RecurrenceOptions>,
 }
 
 /// Email delivery options.
@@ -179,6 +319,12 @@ pub struct InvoiceCreateParams {
     pub amount: f64,
     /// Competence date (`YYYY-MM-DD`).
     pub competence_date: String,
+    /// Purchase order number (DPS `xPed`, up to 60 characters).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub purchase_order: Option<String>,
+    /// Additional information (DPS `xInfComp`, up to 2000 characters).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
     /// Unconditional discount in BRL, from 0 up to `amount`, at most 2 decimal
     /// places.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -198,37 +344,69 @@ pub struct InvoiceCreateParams {
     pub options: Option<InvoiceOptions>,
 }
 
+/// City and state of a customer snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceCustomerSnapshotAddress {
+    /// City.
+    pub city: String,
+    /// State (UF).
+    pub state: String,
+    /// Country, when not Brazil.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub country: Option<String>,
+}
+
 /// A customer snapshot as stored on the invoice.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceCustomerSnapshot {
     /// Customer name.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: String,
     /// Customer email.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
     /// Customer tax id.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tax_id: Option<String>,
     /// Customer address.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub address: Option<InvoiceCustomerAddressInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<InvoiceCustomerSnapshotAddress>,
+    /// Customer outside Brazil: `taxId` or `noTaxIdReason` and the address abroad.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreign: Option<std::collections::BTreeMap<String, String>>,
 }
 
 /// A service snapshot as stored on the invoice.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceServiceSnapshot {
-    /// Municipal service code.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<String>,
+    /// National service code.
+    pub code: String,
     /// Service description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub description: String,
     /// IBGE municipality code.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub municipality_code: Option<String>,
+    pub municipality_code: String,
+    /// Fiscal classification used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fiscal: Option<std::collections::BTreeMap<String, String>>,
+    /// Notes sent on the invoice (DPS `xInfComp`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    /// Purchase order (DPS `xPed`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purchase_order: Option<String>,
+    /// Saved service tax profile used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_profile_id: Option<String>,
+}
+
+/// Whether the e-mail to the customer was requested (`emailSnapshot`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceEmailSnapshot {
+    /// `true` when the e-mail was requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send: Option<bool>,
 }
 
 /// An issued (or in-flight) invoice.
@@ -243,10 +421,9 @@ pub struct Invoice {
     pub tenant_id: String,
     /// Issuance environment (`test` or `live`).
     pub environment: String,
-    /// Document key version.
-    pub document_key_version: i64,
     /// Email settings snapshot.
-    pub email_snapshot: Value,
+    #[serde(default)]
+    pub email_snapshot: Option<InvoiceEmailSnapshot>,
     /// Your external identifier, if set.
     pub external_id: Option<String>,
     /// Idempotency key used at creation, if any.
@@ -269,7 +446,7 @@ pub struct Invoice {
     pub deduction: Option<f64>,
     /// Currency code.
     pub currency: String,
-    /// Competence date (`YYYY-MM-DD`).
+    /// Competence date (ISO 8601).
     pub competence_date: String,
     /// DPS id, once issued.
     pub dps_id: Option<String>,
@@ -282,14 +459,15 @@ pub struct Invoice {
     /// NFS-e number, once authorized.
     pub nfse_number: Option<i64>,
     /// Fiscal provider used.
-    pub fiscal_provider: Option<String>,
+    pub fiscal_provider: String,
     /// Fiscal schema version.
-    pub fiscal_schema_version: Option<String>,
+    pub fiscal_schema_version: String,
     /// When the NFS-e was issued (RFC 3339).
     pub issued_at: Option<String>,
     /// When the NFS-e was authorized (RFC 3339).
     pub authorized_at: Option<String>,
-    /// Last error code, if issuance failed.
+    /// Last error code, if issuance failed: a Sefin rule (`E0014`, ...) or a
+    /// Corvo code such as `DPS_NUMBER_ALREADY_USED`.
     pub last_error_code: Option<String>,
     /// Last error message, if issuance failed.
     pub last_error_message: Option<String>,
@@ -298,7 +476,7 @@ pub struct Invoice {
     /// When documents became ready (RFC 3339).
     pub documents_ready_at: Option<String>,
     /// Last email delivery status.
-    pub last_email_status: Option<String>,
+    pub last_email_status: Option<EmailStatus>,
     /// When the email was last sent (RFC 3339).
     pub last_email_sent_at: Option<String>,
     /// Creation timestamp (RFC 3339).
@@ -306,12 +484,13 @@ pub struct Invoice {
     /// Last update timestamp (RFC 3339).
     pub updated_at: String,
     /// Document generation status.
-    pub documents_status: String,
+    pub documents_status: DocumentsStatus,
     /// Email status.
-    pub email_status: Option<String>,
+    pub email_status: Option<EmailStatus>,
     /// Coarse pipeline stage.
     pub stage: InvoiceStage,
     /// When a scheduled invoice is released (RFC 3339); `None` for an immediate one.
+    #[serde(default)]
     pub scheduled_for: Option<String>,
     /// Why the invoice was cancelled, once a cancellation was requested.
     #[serde(default)]
@@ -325,6 +504,15 @@ pub struct Invoice {
     /// When the cancellation was requested (RFC 3339).
     #[serde(default)]
     pub cancellation_requested_at: Option<String>,
+    /// On a substitute: the invoice it replaces.
+    #[serde(default)]
+    pub substitutes_invoice_id: Option<String>,
+    /// On a substitute: why it was issued.
+    #[serde(default)]
+    pub substitution_description: Option<String>,
+    /// Flag from the national portal.
+    #[serde(default)]
+    pub portal_flag: Option<PortalFlag>,
 }
 
 /// Reason for cancelling an invoice.
@@ -451,11 +639,20 @@ pub struct InvoiceEvent {
     /// The invoice this event belongs to.
     pub invoice_id: String,
     /// Previous status, if any.
-    pub from_status: Option<InvoiceStatus>,
+    pub from_status: Option<String>,
     /// New status.
-    pub to_status: InvoiceStatus,
+    pub to_status: String,
     /// Reason for the transition, if any.
     pub reason: Option<String>,
+    /// `portal` when the event came from the national portal.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Portal event type, for a portal event.
+    #[serde(default)]
+    pub portal_event: Option<String>,
+    /// Portal NSU, for a portal event.
+    #[serde(default)]
+    pub portal_nsu: Option<String>,
     /// When the transition happened (RFC 3339).
     pub created_at: String,
 }
@@ -474,7 +671,7 @@ pub struct InvoiceDownloadUrl {
     pub mime_type: String,
 }
 
-/// Result of sending an invoice by email.
+/// Result of requesting an invoice e-mail.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceEmailResult {
@@ -503,6 +700,9 @@ pub struct InvoiceListParams {
     /// Only invoices with this external id.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_id: Option<String>,
+    /// Only invoices of this customer (CPF or CNPJ, digits).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub customer_tax_id: Option<String>,
     /// Page size (1–1000, default 50).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u16>,
@@ -573,6 +773,55 @@ pub struct CalculationBlocking {
     pub message: String,
     /// Pipeline step that blocked.
     pub step: String,
+    /// `VALIDATION`, `CONFIGURATION`, `CLASSIFICATION`, `UNSUPPORTED`,
+    /// `CALCULATION`, `INTEGRATION` or `INTERNAL`.
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Extra details (free-form).
+    #[serde(default)]
+    pub details: Option<Value>,
+    /// Whether trying again can work.
+    #[serde(default)]
+    pub retryable: Option<bool>,
+}
+
+/// A withholding of a pre-emission estimate. Amounts are decimal strings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WithholdingAmount {
+    /// `ISS`, `IRRF`, `PIS`, `COFINS`, `CSLL` or `INSS`.
+    pub tax: String,
+    /// Calculation base.
+    pub base: String,
+    /// Rate in percent.
+    pub rate: String,
+    /// Amount withheld.
+    pub amount: String,
+}
+
+/// A non-blocking fiscal warning of an estimate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FiscalWarning {
+    /// Stable code.
+    pub code: String,
+    /// Human-readable message.
+    pub message: String,
+    /// Pipeline step that warned.
+    pub step: String,
+}
+
+/// One step of the calculation pipeline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalculationTrace {
+    /// Step name.
+    pub step: String,
+    /// `applied`, `skipped` or `failed`.
+    pub status: String,
+    /// Duration in milliseconds.
+    pub duration_ms: f64,
+    /// Why it was skipped or failed.
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 /// A field missing for the estimate.
@@ -610,9 +859,9 @@ pub struct InvoiceCalculation {
     /// The calculated taxes.
     #[serde(default)]
     pub taxes: CalculatedTaxes,
-    /// Withholdings (free-form).
+    /// Withholdings.
     #[serde(default)]
-    pub withholdings: Vec<Value>,
+    pub withholdings: Vec<WithholdingAmount>,
     /// Net amount to receive, a decimal string.
     #[serde(default)]
     pub net_receivable_amount: Option<String>,
@@ -622,16 +871,274 @@ pub struct InvoiceCalculation {
     /// Calculation provenance (free-form).
     #[serde(default)]
     pub calculation: Value,
-    /// Non-blocking warnings (free-form).
+    /// Non-blocking warnings.
     #[serde(default)]
-    pub warnings: Vec<Value>,
+    pub warnings: Vec<FiscalWarning>,
     /// Fields still missing.
     #[serde(default)]
     pub pending_fields: Vec<CalculationPendingField>,
     /// Set when `status` is `"blocked"`.
     #[serde(default)]
     pub blocking: Option<CalculationBlocking>,
-    /// Pipeline trace (free-form).
+    /// Pipeline trace.
     #[serde(default)]
-    pub trace: Vec<Value>,
+    pub trace: Vec<CalculationTrace>,
+    /// Always `true`: the values are not a fiscal document.
+    #[serde(default)]
+    pub pre_emission: Option<bool>,
+}
+
+/// Substitution of an authorized invoice: only the reason, the service
+/// description, the purchase order and the notes can change.
+///
+/// Used by [`Invoices::substitute`](crate::Invoices::substitute).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceSubstituteParams {
+    /// Why the invoice is replaced (15 to 255 characters).
+    pub description: String,
+    /// New notes (up to 2000 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    /// New purchase order (up to 60 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purchase_order: Option<String>,
+    /// New service description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<SubstituteService>,
+}
+
+impl InvoiceSubstituteParams {
+    /// Substitution with the reason `description` and no other change.
+    pub fn new(description: impl Into<String>) -> Self {
+        Self {
+            description: description.into(),
+            notes: None,
+            purchase_order: None,
+            service: None,
+        }
+    }
+}
+
+/// The service fields that a substitute may change.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubstituteService {
+    /// New service description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Window of [`Invoices::overview`](crate::Invoices::overview).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OverviewPeriod {
+    /// Last 7 days.
+    #[serde(rename = "7d")]
+    SevenDays,
+    /// Last 30 days.
+    #[serde(rename = "30d")]
+    ThirtyDays,
+}
+
+impl OverviewPeriod {
+    /// The exact string the API expects on the wire.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OverviewPeriod::SevenDays => "7d",
+            OverviewPeriod::ThirtyDays => "30d",
+        }
+    }
+}
+
+/// Counts of an invoice overview.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OverviewCounts {
+    /// Authorized invoices.
+    pub authorized: i64,
+    /// Invoices being processed.
+    pub processing: i64,
+    /// Rejected invoices.
+    pub rejected: i64,
+}
+
+/// Invoices of one day in an overview.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OverviewDay {
+    /// Day (`YYYY-MM-DD`).
+    pub date: String,
+    /// Invoices of that day.
+    pub count: i64,
+}
+
+/// Invoice overview of the tenant and environment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceOverview {
+    /// Totals by outcome.
+    pub counts: OverviewCounts,
+    /// Invoices per day.
+    pub daily_activity: Vec<OverviewDay>,
+    /// Start of the window.
+    pub from: String,
+    /// `7d` or `30d`.
+    pub period: String,
+    /// The latest invoices.
+    pub recent_invoices: Vec<Invoice>,
+    /// Time zone of the days.
+    pub timezone: String,
+    /// End of the window.
+    pub to: String,
+}
+
+/// What to do with invoices in `manual_review`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewAction {
+    /// Try to issue again.
+    Retry,
+    /// Discard the invoice.
+    Discard,
+}
+
+/// Parameters of [`Invoices::review`](crate::Invoices::review).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceReviewParams {
+    /// Retry or discard.
+    pub action: ReviewAction,
+    /// Up to 100 invoice ids in `manual_review`.
+    pub invoice_ids: Vec<String>,
+}
+
+/// Outcome of one invoice of a review: `accepted` or `skipped`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceReviewOutcome {
+    /// Invoice id.
+    pub id: String,
+    /// `accepted` or `skipped`.
+    pub outcome: String,
+    /// When skipped: `not_found`, `not_in_manual_review` or `changed`.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Result of [`Invoices::review`](crate::Invoices::review).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceReviewResult {
+    /// One entry per invoice sent.
+    pub results: Vec<InvoiceReviewOutcome>,
+}
+
+/// What `POST /invoices` created: an invoice for `IMMEDIATE`, a schedule for
+/// `SCHEDULE` and `RECURRING`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum InvoiceCreated {
+    /// The invoice, `queued`.
+    Invoice(Box<Invoice>),
+    /// The schedule that will issue the invoice.
+    Schedule(Box<crate::types::schedule::Schedule>),
+}
+
+impl InvoiceCreated {
+    /// The invoice, when one was created.
+    pub fn invoice(&self) -> Option<&Invoice> {
+        match self {
+            InvoiceCreated::Invoice(i) => Some(i),
+            InvoiceCreated::Schedule(_) => None,
+        }
+    }
+
+    /// The schedule, when one was created.
+    pub fn schedule(&self) -> Option<&crate::types::schedule::Schedule> {
+        match self {
+            InvoiceCreated::Schedule(s) => Some(s),
+            InvoiceCreated::Invoice(_) => None,
+        }
+    }
+
+    /// The invoice, or `None` when a schedule was created.
+    pub fn into_invoice(self) -> Option<Invoice> {
+        match self {
+            InvoiceCreated::Invoice(i) => Some(*i),
+            InvoiceCreated::Schedule(_) => None,
+        }
+    }
+
+    /// The schedule, or `None` when an invoice was created.
+    pub fn into_schedule(self) -> Option<crate::types::schedule::Schedule> {
+        match self {
+            InvoiceCreated::Schedule(s) => Some(*s),
+            InvoiceCreated::Invoice(_) => None,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for InvoiceCreated {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = Value::deserialize(deserializer)?;
+        // A schedule has `anchor_on` (snake_case); an invoice never does.
+        if value.get("anchor_on").is_some() {
+            serde_json::from_value(value)
+                .map(|s| InvoiceCreated::Schedule(Box::new(s)))
+                .map_err(serde::de::Error::custom)
+        } else {
+            serde_json::from_value(value)
+                .map(|i| InvoiceCreated::Invoice(Box::new(i)))
+                .map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+/// Whether the national NFS-e portal is answering (`fiscalPortal_status`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalStatus {
+    /// `true` when the portal answers.
+    pub available: bool,
+    /// Environment the answer is for.
+    pub environment: String,
+    /// When to try again, while unavailable.
+    #[serde(default)]
+    pub retry_at: Option<String>,
+    /// Since when the portal is unavailable.
+    #[serde(default)]
+    pub since: Option<String>,
+}
+
+/// Count and total of a month package.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageSummary {
+    /// Company name.
+    pub company_name: String,
+    /// Company CNPJ.
+    pub company_tax_id: String,
+    /// Invoices in the month.
+    pub count: i64,
+    /// Most invoices a package can hold.
+    pub limit: i64,
+    /// Month (`YYYY-MM`).
+    pub month: String,
+    /// Sum of the gross amount of the authorized notes, in BRL, as a decimal
+    /// string with two places (for example `"1234.50"`).
+    pub total: String,
+}
+
+/// A part of the month package (`include`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackagePart {
+    /// The XML files.
+    Xml,
+    /// The PDF files.
+    Pdf,
+}
+
+impl PackagePart {
+    /// The exact string the API expects on the wire.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PackagePart::Xml => "xml",
+            PackagePart::Pdf => "pdf",
+        }
+    }
 }

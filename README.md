@@ -8,13 +8,13 @@
 - **Safe retries.** Issuing an invoice and sending an email accept an idempotency key.
 - **Webhook signature check** in constant time.
 
-Full API reference: <https://corvo.tech/en/docs>.
+Full API reference: <https://corvo.tech/en/docs>. Machine-readable contract (OpenAPI 0.3.0): <https://corvo.tech/openapi.json>; a copy is vendored in `spec/openapi.json`.
 
 ## Install
 
 ```toml
 [dependencies]
-corvo-nfse = "0.1"
+corvo-nfse = "0.3"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -147,7 +147,62 @@ let invoice = corvo
 println!("queued {}", invoice.id);
 ```
 
-Set `options: Some(InvoiceOptions { invoice_type: Some(InvoiceType::Schedule), ..Default::default() })` with a future `competence_date` to schedule the issuance.
+`create` returns an `InvoiceCreated`: the invoice for an immediate issuance, or a `Schedule` when `options.type` is `Schedule` or `Recurring` (see below).
+
+### Schedule or repeat an invoice
+
+`options.type` `Schedule` or `Recurring` create a *schedule* (answer `202`): the note only exists when it runs (09:00 America/Sao_Paulo, Monday to Friday). `competence_date` is the first run and must be from tomorrow on.
+
+```rust
+use corvo_nfse::{Frequency, InvoiceOptions, InvoiceType, RecurrenceOptions};
+
+let created = corvo.invoices().create(&InvoiceCreateParams {
+    company_tax_id: Some("11222333000181".into()),
+    service: InvoiceServiceInput { description: Some("Mensalidade".into()), ..Default::default() },
+    amount: 300.0,
+    competence_date: "2026-12-01".into(),
+    options: Some(InvoiceOptions {
+        invoice_type: Some(InvoiceType::Recurring),
+        recurrence: Some(RecurrenceOptions { frequency: Frequency::Monthly, ends_on: None }),
+        ..Default::default()
+    }),
+    ..Default::default()
+}, Some("mensalidade-acme")).await?;
+let schedule = created.into_schedule().expect("a schedule");
+
+let runs = corvo.schedules().list_runs(&schedule.id, None, None).await?;
+corvo.schedules().pause(&schedule.id).await?; // also resume, cancel, update, list, get
+```
+
+### Look up a CNPJ, saved customers and favorite services
+
+```rust
+let company = corvo.cnpj().lookup("11222333000181").await?;
+println!("{} ({})", company.legal_name, company.situation);
+
+let customers = corvo.customers().search(&Default::default()).await?; // also get, update, remove, iterate
+let favorites = corvo.service_favorites().list("company-uuid").await?; // also create, remove
+```
+
+### Send the monthly package to the accountant
+
+```rust
+corvo.accountant_package().update("company-uuid", Some("contador@example.com")).await?;
+let sent = corvo.accountant_package().send("company-uuid", "2026-10").await?;
+let zip = corvo.invoice_package().download("company-uuid", "2026-10", None).await?; // bytes of the ZIP
+```
+
+### Import a spreadsheet
+
+```rust
+use corvo_nfse::{ImportEmitParams, ImportStartParams};
+
+let started = corvo.imports().start(&ImportStartParams::new(std::fs::read("notas.csv")?).file_name("notas.csv")).await?;
+// poll corvo.imports().get(&started.id) until status is Ready, fix rows with update_row, then:
+corvo.imports().emit(&started.id, &ImportEmitParams::default()).await?;
+```
+
+Also in the SDK: substitute an authorized invoice (`invoices().substitute`), resolve `manual_review` (`invoices().review`), the DPS numbering (`dps_sequence()`), fiscal profiles, service tax profiles and payment platform integrations (`integrations()`, `integration_connections()`, `integration_operations()`).
 
 ### Cancel an invoice
 
@@ -220,15 +275,25 @@ if verify_signature(&raw_body, signature_header, "whsec_…") {
 
 ## Resources
 
+All 94 operations of the contract are covered (`tests/contract_coverage.rs` checks them against `spec/openapi.json`).
+
 | Namespace | Operations |
 |---|---|
 | `corvo.companies()` | `create`, `list`, `iterate`, `get`, `update`, `remove` |
 | `corvo.certificates()` | `upload`, `list`, `remove` |
-| `corvo.invoices()` | `create`, `calculate`, `list`, `iterate`, `get`, `events`, `pdf`, `xml`, `download_url`, `send_email`, `cancel` |
+| `corvo.invoices()` | `create`, `create_batch`, `calculate`, `list`, `iterate`, `get`, `events`, `pdf`, `xml`, `download_url`, `send_email`, `cancel`, `substitute`, `overview`, `review` |
+| `corvo.schedules()` | `list`, `iterate`, `get`, `update`, `pause`, `resume`, `cancel`, `list_runs` |
+| `corvo.imports()` | `start`, `list`, `get`, `emit`, `rows`, `iterate_rows`, `update_row`, `discard`, `download_template`, `download_errors` |
+| `corvo.customers()` / `corvo.cnpj()` | `search`, `iterate`, `get`, `update`, `remove` / `lookup` |
+| `corvo.service_favorites()` | `list`, `create`, `remove` |
+| `corvo.accountant_package()` / `corvo.invoice_package()` | `get`, `update`, `send`, `list_sends` / `summary`, `download` |
+| `corvo.fiscal_profiles()` / `corvo.service_tax_profiles()` / `corvo.dps_sequence()` | `list`, `upsert`, `approve` / `list`, `create`, `update`, `remove`, `approve` / `get`, `set` |
+| `corvo.integrations()` / `.integration_connections()` / `.integration_operations()` | `list_providers` / `list`, `create`, `get`, `validate`, `update_credentials`, `activate`, `pause`, `disconnect`, `list_rules`, `replace_rules`, `list_events`, `list_operations` / `complete_customer`, `retry` |
 | `corvo.webhooks()` | `list`, `create`, `remove`, `test`, `.deliveries().{list, iterate, stats, retry}` |
-| `corvo.credits()` | `balance`, `plans`, `history`, `iterate_history` |
+| `corvo.credits()` | `balance`, `plans`, `history`, `iterate_history`, `preview_purchase` |
 | `corvo.billing()` | `plan`, `usage` |
-| `corvo.plans()` | `list`, `get`, `quote` (public price catalog) |
+| `corvo.fiscal_portal()` | `status` |
+| `corvo.plans()` | `list`, `get` (public price catalog, no API key), `quote` (outside the contract) |
 | `corvo.health()` | `live`, `ready` |
 
 Changing plans and the billing portal exist only in the dashboard, so they are not in the SDK.
@@ -246,6 +311,8 @@ Changing plans and the billing portal exist only in the dashboard, so they are n
 ## Behavior
 
 - **Auth.** Every request sends `X-API-Key`. Keys are `corvo_test_...` or `corvo_live_...` and belong to one account and environment; the key decides the environment.
+- **Plans.** Plan slugs are `free`, `solo`, `equipe`, `empresa` and `escala` (plus `self-hosted`): treat the slug as an open string and read the allowances from the plan.
+- **Environment.** Webhooks and integration connections are tied to the environment of the key that created them: manage live ones with a `corvo_live_` key. Webhook URLs on private networks are refused.
 - **Responses.** Single resources and list items come back as the API's `data`; lists add `pagination`. Optional fields are `Option<_>`.
 - **Errors.** `code` is the API's `ERROR_*` code, falling back to `http_<status>`; local failures use `network_error` and `timeout`. On `429`, `retry_after` holds the seconds to wait.
 

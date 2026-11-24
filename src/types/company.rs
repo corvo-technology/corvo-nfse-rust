@@ -2,8 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Brazilian tax regime of a company. Corvo serves only these two regimes; any
-/// other value is rejected with `422` `ERROR_TAX_REGIME_NOT_SUPPORTED`.
+/// Brazilian tax regime of a company. The contract lists four values; Corvo
+/// issues only for `MEI` and `Simples Nacional`, any other regime is rejected
+/// with `422` `ERROR_TAX_REGIME_NOT_SUPPORTED`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaxRegime {
     /// Microempreendedor Individual.
@@ -12,6 +13,12 @@ pub enum TaxRegime {
     /// Simples Nacional.
     #[serde(rename = "Simples Nacional")]
     SimplesNacional,
+    /// Lucro Presumido.
+    #[serde(rename = "Lucro Presumido")]
+    LucroPresumido,
+    /// Lucro Real.
+    #[serde(rename = "Lucro Real")]
+    LucroReal,
 }
 
 impl TaxRegime {
@@ -20,6 +27,8 @@ impl TaxRegime {
         match self {
             TaxRegime::Mei => "MEI",
             TaxRegime::SimplesNacional => "Simples Nacional",
+            TaxRegime::LucroPresumido => "Lucro Presumido",
+            TaxRegime::LucroReal => "Lucro Real",
         }
     }
 }
@@ -155,6 +164,7 @@ pub struct Company {
     /// Registered legal name.
     pub legal_name: String,
     /// Trade name, if set.
+    #[serde(default)]
     pub trade_name: Option<String>,
     /// CNPJ, digits only.
     pub tax_id: String,
@@ -175,8 +185,22 @@ pub struct Company {
     pub tax_regime: Option<TaxRegime>,
     /// Simples Nacional enrollment.
     pub simple_national: bool,
+    /// Effective total rate (%) of the DAS, as a decimal string.
+    #[serde(default)]
+    pub simples_rate: Option<String>,
+    /// Effective ISS rate (%) of the Simples bracket, as a decimal string.
+    #[serde(default)]
+    pub simples_iss_rate: Option<String>,
     /// Special regime note, if set.
+    #[serde(default)]
     pub special_regime: Option<String>,
+    /// What the Receita says about the municipality's adhesion to the national
+    /// system.
+    #[serde(default)]
+    pub municipality_agreement: Option<MunicipalityAgreement>,
+    /// Registry warnings (for example `TAX_REGIME_REGISTRY_MISMATCH`).
+    #[serde(default)]
+    pub warnings: Vec<RegistryWarning>,
     /// Address street, if provided.
     #[serde(default)]
     pub address_street: Option<String>,
@@ -208,10 +232,28 @@ pub struct Company {
     pub created_at: String,
     /// Last update timestamp (RFC 3339).
     pub updated_at: String,
-    /// Deletion timestamp, if soft-deleted.
-    #[serde(default)]
-    pub deleted_at: Option<String>,
     /// Setup steps still missing before the company can issue
     /// (`municipality_code`, `certificate`).
     pub setup_gaps: Vec<String>,
+}
+
+/// The municipality's adhesion to the national NFS-e system (`municipalityAgreement`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MunicipalityAgreement {
+    /// `not_checked`, `active`, `inactive`, `unknown` or `not_found`.
+    pub status: String,
+    /// Agreement type, when known.
+    pub agreement_type: Option<String>,
+    /// When it was checked (RFC 3339).
+    pub checked_at: Option<String>,
+}
+
+/// A registry warning about a company.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryWarning {
+    /// `TAX_REGIME_REGISTRY_MISMATCH` or `MEI_MUNICIPALITY_MISMATCH`.
+    pub code: String,
+    /// Human-readable message.
+    pub message: String,
 }

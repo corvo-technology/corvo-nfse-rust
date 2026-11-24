@@ -1,6 +1,6 @@
 [package]
 name = "corvo-nfse"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Rust SDK for the Corvo NFS-e API: issue Brazilian service invoices, calculate taxes, verify webhooks."
@@ -11,7 +11,7 @@ documentation = "https://docs.rs/corvo-nfse"
 readme = "README.md"
 keywords = ["nfse", "brazil", "invoice", "fiscal", "api-client"]
 categories = ["api-bindings", "asynchronous"]
-exclude = ["/.github"]
+exclude = ["/.github", "/spec"]
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }

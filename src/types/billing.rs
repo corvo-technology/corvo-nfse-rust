@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct BillingPlanInfo {
-    /// Plan slug.
+    /// Plan slug: `free`, `solo`, `equipe`, `empresa` or `escala` (plus
+    /// `self-hosted`). Treat it as an open string.
     pub slug: String,
     /// Plan display name.
     pub name: String,
@@ -36,8 +37,33 @@ pub struct BillingSubscription {
     pub cancel_at_period_end: bool,
     /// Slug of the scheduled plan change, if any.
     pub scheduled_plan: Option<String>,
-    /// Whether the tenant is blocked from issuing.
+    /// Whether the tenant is blocked from issuing (the plan lapsed).
     pub blocked: bool,
+    /// Whether the billing portal of the card subscription is available.
+    pub stripe_portal_available: bool,
+    /// Whether the plan is paid by card subscription.
+    pub stripe_subscription: bool,
+    /// The Pix subscription, or `None`.
+    pub pix_subscription: Option<PixSubscription>,
+}
+
+/// A Pix subscription of the tenant.
+///
+/// Note: this endpoint's wire format uses `camelCase` inside this object.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PixSubscription {
+    /// `active` or `pending`.
+    pub status: String,
+    /// Slug of the plan being paid.
+    pub plan_slug: String,
+    /// Pix copy-and-paste code, while pending.
+    pub br_code: Option<String>,
+    /// Payment link, while pending.
+    pub payment_link_url: Option<String>,
+    /// Payment id.
+    #[serde(default)]
+    pub payment_id: Option<String>,
 }
 
 /// Usage counters returned by the billing plan endpoint.
@@ -46,12 +72,10 @@ pub struct BillingSubscription {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct BillingUsage {
-    /// Billable overage units.
-    pub overage_units: i64,
-    /// Overage amount in cents.
-    pub overage_amount_cents: i64,
-    /// Hard limit on overage; `None` for unlimited.
-    pub hard_limit: Option<i64>,
+    /// Hard limit of notes.
+    pub hard_limit: i64,
+    /// Loose notes (avulso) bought separately.
+    pub avulso_balance: i64,
     /// Credits consumed this period.
     pub credits_used: i64,
     /// Credits reserved for in-flight work.

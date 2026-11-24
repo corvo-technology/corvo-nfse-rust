@@ -8,8 +8,9 @@ use crate::transport::{push_query, DownloadedFile, Paginator, RequestSpec, Unwra
 use crate::types::common::Paginated;
 use crate::types::invoice::{
     DownloadFormat, Invoice, InvoiceBatchItem, InvoiceBatchSummary, InvoiceCalculation,
-    InvoiceCancelParams, InvoiceCreateParams, InvoiceDownloadUrl, InvoiceEmailResult, InvoiceEvent,
-    InvoiceListParams,
+    InvoiceCancelParams, InvoiceCreateParams, InvoiceCreated, InvoiceDownloadUrl,
+    InvoiceEmailResult, InvoiceEvent, InvoiceListParams, InvoiceOverview, InvoiceReviewParams,
+    InvoiceReviewResult, InvoiceSubstituteParams, OverviewPeriod,
 };
 
 /// Invoices resource, obtained via [`Corvo::invoices()`](crate::Corvo::invoices).
@@ -22,7 +23,13 @@ impl<'c> Invoices<'c> {
         Self { transport }
     }
 
-    /// Issue an invoice (`POST /invoices`).
+    /// Issue an invoice, or schedule one (`POST /invoices`).
+    ///
+    /// Answers `202`. With `options.type` `IMMEDIATE` (the default) the answer is
+    /// the invoice, `queued`; with `SCHEDULE` or `RECURRING` it is the
+    /// [schedule](crate::Schedule) that will issue it (see
+    /// [`InvoiceCreated`]). Follow the runs with
+    /// [`Schedules::list_runs`](crate::Schedules::list_runs).
     ///
     /// `idempotency_key` is sent as the `Idempotency-Key` header when provided;
     /// retries with the same key never duplicate an invoice.
@@ -30,10 +37,48 @@ impl<'c> Invoices<'c> {
         &self,
         params: &InvoiceCreateParams,
         idempotency_key: Option<&str>,
-    ) -> Result<Invoice, CorvoError> {
+    ) -> Result<InvoiceCreated, CorvoError> {
         let spec = RequestSpec::post("/invoices")
             .json(params)?
             .idempotency_key(idempotency_key.map(str::to_owned));
+        self.transport.request_json(&spec).await
+    }
+
+    /// Replace an authorized invoice with a corrected one
+    /// (`POST /invoices/:id/substitute`). Answers `202` with the new invoice.
+    ///
+    /// Only the reason, `service.description`, `purchase_order` and `notes` can
+    /// change. `idempotency_key` is sent as the `Idempotency-Key` header.
+    pub async fn substitute(
+        &self,
+        id: &str,
+        params: &InvoiceSubstituteParams,
+        idempotency_key: Option<&str>,
+    ) -> Result<Invoice, CorvoError> {
+        let spec = RequestSpec::post(&format!("/invoices/{}/substitute", encode(id)))
+            .json(params)?
+            .idempotency_key(idempotency_key.map(str::to_owned));
+        self.transport.request_json(&spec).await
+    }
+
+    /// Invoice overview of the tenant and environment (`GET /invoices/overview`).
+    pub async fn overview(
+        &self,
+        period: Option<OverviewPeriod>,
+    ) -> Result<InvoiceOverview, CorvoError> {
+        let mut query = Vec::new();
+        push_query(&mut query, "period", period.map(|p| p.as_str().to_owned()));
+        let spec = RequestSpec::get("/invoices/overview").query(query);
+        self.transport.request_json(&spec).await
+    }
+
+    /// Resolve up to 100 invoices in `manual_review`: retry or discard
+    /// (`POST /invoices/review`).
+    pub async fn review(
+        &self,
+        params: &InvoiceReviewParams,
+    ) -> Result<InvoiceReviewResult, CorvoError> {
+        let spec = RequestSpec::post("/invoices/review").json(params)?;
         self.transport.request_json(&spec).await
     }
 
@@ -61,6 +106,7 @@ impl<'c> Invoices<'c> {
         &self,
         params: &InvoiceCreateParams,
     ) -> Result<InvoiceCalculation, CorvoError> {
+        // The answer is `{ data: InvoiceCalculation }`; the transport unwraps it.
         let spec = RequestSpec::post("/invoices/calculate").json(params)?;
         self.transport.request_json(&spec).await
     }
@@ -133,14 +179,20 @@ impl<'c> Invoices<'c> {
         self.transport.request_json(&spec).await
     }
 
-    /// Re-send the invoice by email (`POST /invoices/:id/email`).
+    /// Request the invoice e-mail (`POST /invoices/:id/email`). Answers `202`.
+    ///
+    /// Sends to the customer's e-mail, or to `email` when given.
     pub async fn send_email(
         &self,
         id: &str,
+        email: Option<&str>,
         idempotency_key: Option<&str>,
     ) -> Result<InvoiceEmailResult, CorvoError> {
-        let spec = RequestSpec::post(&format!("/invoices/{}/email", encode(id)))
-            .idempotency_key(idempotency_key.map(str::to_owned));
+        let mut spec = RequestSpec::post(&format!("/invoices/{}/email", encode(id)));
+        if let Some(email) = email {
+            spec = spec.json(&json!({ "email": email }))?;
+        }
+        let spec = spec.idempotency_key(idempotency_key.map(str::to_owned));
         self.transport.request_json(&spec).await
     }
 
@@ -201,6 +253,7 @@ fn list_query(params: &InvoiceListParams) -> Vec<(String, String)> {
     push_query(&mut query, "from", params.from.clone());
     push_query(&mut query, "to", params.to.clone());
     push_query(&mut query, "externalId", params.external_id.clone());
+    push_query(&mut query, "customerTaxId", params.customer_tax_id.clone());
     push_query(&mut query, "limit", params.limit.map(|l| l.to_string()));
     push_query(&mut query, "cursor", params.cursor.clone());
     query

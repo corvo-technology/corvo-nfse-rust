@@ -76,20 +76,19 @@ async fn returns_the_invoice_from_the_data_envelope() {
                 "companyId": "c_1",
                 "tenantId": "ten_1",
                 "environment": "test",
-                "documentKeyVersion": 1,
                 "emailSnapshot": { "send": true },
                 "externalId": null,
                 "idempotencyKey": null,
                 "status": "authorized",
                 "customerSnapshot": { "name": "Customer", "taxId": "52998224725" },
-                "serviceSnapshot": { "code": "0107" },
+                "serviceSnapshot": { "code": "0107", "description": "S", "municipalityCode": "3550308" },
                 "taxSnapshot": {},
                 "amount": 10.5,
                 "currency": "BRL",
                 "competenceDate": "2026-10-13",
                 "dpsId": null, "dpsSeries": null, "dpsNumber": null,
                 "accessKey": null, "nfseNumber": null,
-                "fiscalProvider": null, "fiscalSchemaVersion": null,
+                "fiscalProvider": "nacional", "fiscalSchemaVersion": "1.01",
                 "issuedAt": null, "authorizedAt": null,
                 "lastErrorCode": null, "lastErrorMessage": null, "lastErrorProvider": null,
                 "documentsReadyAt": null,
@@ -97,7 +96,7 @@ async fn returns_the_invoice_from_the_data_envelope() {
                 "createdAt": "2026-10-13T00:00:00Z",
                 "updatedAt": "2026-10-13T00:00:00Z",
                 "documentsStatus": "pending",
-                "emailStatus": "pending",
+                "emailStatus": null,
                 "stage": "authorized"
             }
         })))
@@ -392,23 +391,22 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
             "customer": { "name": "Customer", "taxId": "52998224725" },
             "service": { "code": "0107" }
         })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+        .respond_with(ResponseTemplate::new(202).set_body_json(json!({
             "data": {
-                "id": "inv_1", "companyId": "c_1", "tenantId": "ten_1",
-                "environment": "test", "documentKeyVersion": 1,
+                "id": "inv_1", "companyId": "c_1", "tenantId": "ten_1", "environment": "test",
                 "emailSnapshot": { "send": false }, "externalId": null,
                 "idempotencyKey": "idem_1", "status": "queued",
-                "customerSnapshot": { "name": "Customer" }, "serviceSnapshot": { "code": "0107" },
+                "customerSnapshot": { "name": "Customer" }, "serviceSnapshot": { "code": "0107", "description": "S", "municipalityCode": "3550308" },
                 "taxSnapshot": {}, "amount": 10.5, "currency": "BRL",
                 "competenceDate": "2026-10-13",
                 "dpsId": null, "dpsSeries": null, "dpsNumber": null,
                 "accessKey": null, "nfseNumber": null,
-                "fiscalProvider": null, "fiscalSchemaVersion": null,
+                "fiscalProvider": "nacional", "fiscalSchemaVersion": "1.01",
                 "issuedAt": null, "authorizedAt": null,
                 "lastErrorCode": null, "lastErrorMessage": null, "lastErrorProvider": null,
                 "documentsReadyAt": null, "lastEmailStatus": null, "lastEmailSentAt": null,
                 "createdAt": "2026-10-13T00:00:00Z", "updatedAt": "2026-10-13T00:00:00Z",
-                "documentsStatus": "pending", "emailStatus": "pending", "stage": "pending"
+                "documentsStatus": "pending", "emailStatus": null, "stage": "pending"
             }
         })))
         .mount(&server)
@@ -421,7 +419,7 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
         external_id: None,
         customer: Some(InvoiceCustomerInput {
             name: Some("Customer".into()),
-            tax_id: "52998224725".into(),
+            tax_id: Some("52998224725".into()),
             ..Default::default()
         }),
         service: InvoiceServiceInput {
@@ -436,7 +434,9 @@ async fn invoice_create_sends_camel_case_body_and_idempotency_key() {
         .invoices()
         .create(&params, Some("idem_1"))
         .await
-        .expect("create invoice");
+        .expect("create invoice")
+        .into_invoice()
+        .expect("an invoice, not a schedule");
     assert_eq!(invoice.id, "inv_1");
     assert_eq!(invoice.status, InvoiceStatus::Queued);
 }
@@ -465,6 +465,7 @@ async fn invoice_list_query_params_pass_through() {
             from: None,
             to: None,
             external_id: None,
+            customer_tax_id: None,
             limit: Some(3),
             cursor: None,
         })
@@ -588,13 +589,25 @@ async fn plans_catalog_list_get_and_quote() {
     Mock::given(method("GET"))
         .and(path("/v1/plans"))
         .and(query_param("limit", "5"))
+        .and(query_param("cycle", "annual"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [{
-                "slug": "developer", "name": "Developer", "monthlyAllowance": 200,
-                "basePriceCents": 2990, "perCreditOverageCents": 15,
-                "monthlyTotalCents": 2990, "currency": "BRL"
+                "slug": "solo", "name": "Solo", "monthlyAllowance": 200,
+                "basePriceCents": 2990, "monthlyEquivalentCents": 2490,
+                "chargeTotalCents": 29880, "currency": "BRL"
             }],
             "pagination": { "limit": 5, "hasMore": false, "nextCursor": null }
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/plans/solo"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {
+                "slug": "solo", "name": "Solo", "monthlyAllowance": 200,
+                "basePriceCents": 2990, "monthlyEquivalentCents": 2490,
+                "chargeTotalCents": 29880, "currency": "BRL"
+            }
         })))
         .mount(&server)
         .await;
@@ -619,8 +632,15 @@ async fn plans_catalog_list_get_and_quote() {
         .await;
 
     let corvo = client_for(&server);
-    let page = corvo.plans().list(Some(5), None).await.expect("list");
-    assert_eq!(page.data[0].slug, "developer");
+    let page = corvo
+        .plans()
+        .list(Some(5), None, Some("annual"))
+        .await
+        .expect("list");
+    assert_eq!(page.data[0].slug, "solo");
+    assert_eq!(page.data[0].charge_total_cents, 29880);
+    let one = corvo.plans().get("solo", None).await.expect("get");
+    assert_eq!(one.monthly_equivalent_cents, 2490);
     let quote = corvo.plans().quote(20000).await.expect("quote").unwrap();
     assert_eq!(quote.recommended_plan, "volume");
     assert_eq!(quote.total_estimated_cents, 179990);

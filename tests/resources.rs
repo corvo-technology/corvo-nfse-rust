@@ -172,7 +172,7 @@ async fn delivery_stats_sends_query_params() {
     let stats = corvo
         .webhooks()
         .deliveries()
-        .stats(Some(24), Some(Environment::Test))
+        .stats(Some(24.0), Some(Environment::Test))
         .await
         .expect("stats");
     assert_eq!(stats.total, 9);
@@ -190,11 +190,10 @@ async fn credit_balance_unwraps_data() {
         .and(path("/v1/credits"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": {
-                "tenantId": "ten_1",
-                "balance": 100.5,
-                "overageUnits": 0,
-                "overageAmountCents": 0,
-                "hardLimit": null
+                "balance": 100,
+                "planRemaining": 97,
+                "avulsoBalance": 3,
+                "hardLimit": 1000
             }
         })))
         .mount(&server)
@@ -202,8 +201,10 @@ async fn credit_balance_unwraps_data() {
 
     let corvo = client_for(&server);
     let balance = corvo.credits().balance().await.expect("balance");
-    assert_eq!(balance.balance, 100.5);
-    assert_eq!(balance.hard_limit, None);
+    assert_eq!(balance.balance, 100);
+    assert_eq!(balance.plan_remaining, 97);
+    assert_eq!(balance.avulso_balance, 3);
+    assert_eq!(balance.hard_limit, 1000);
 }
 
 #[tokio::test]
@@ -213,7 +214,7 @@ async fn credit_plans_returns_the_items() {
         .and(path("/v1/credits/plans"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": [ {
-                "id": "plan_1", "slug": "pro", "name": "Pro", "description": "pro plan",
+                "id": "plan_1", "slug": "equipe", "name": "Equipe", "description": "pro plan",
                 "monthlyCreditAllowance": 750, "dailyLimit": null, "maxActiveCompanies": 5, "creditUnitPriceCents": 9,
                 "throughputRps": 10, "includesWebhooks": true, "includesXmlDownload": true,
                 "includesPdfDownload": true, "includesApiKeys": true, "supportTier": "priority",
@@ -232,7 +233,7 @@ async fn credit_plans_returns_the_items() {
         .await
         .expect("plans");
     assert_eq!(plans.data.len(), 1);
-    assert_eq!(plans.data[0].slug, "pro");
+    assert_eq!(plans.data[0].slug, "equipe");
 }
 
 #[tokio::test]
@@ -243,15 +244,20 @@ async fn billing_plan_uses_snake_case_wire_format() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": {
                 "plan": {
-                    "slug": "pro", "name": "Pro", "monthly_allowance": 1000,
+                    "slug": "equipe", "name": "Equipe", "monthly_allowance": 1000,
                     "daily_limit": 100, "max_active_companies": 5, "monthly_price_cents": 9900
                 },
                 "subscription": {
                     "status": "active", "paid_until": "2026-11-01T00:00:00Z",
-                    "cancel_at_period_end": false, "scheduled_plan": null, "blocked": false
+                    "cancel_at_period_end": false, "scheduled_plan": null, "blocked": false,
+                    "stripe_portal_available": true, "stripe_subscription": true,
+                    "pix_subscription": {
+                        "status": "pending", "planSlug": "solo", "paymentId": "pay_1",
+                        "brCode": "000201", "paymentLinkUrl": null
+                    }
                 },
                 "usage": {
-                    "overage_units": 0, "overage_amount_cents": 0, "hard_limit": null,
+                    "hard_limit": 1000, "avulso_balance": 3,
                     "credits_used": 10, "credits_reserved": 0, "credits_remaining": 990,
                     "monthly_allowance": 1000, "daily_usage": 3, "daily_limit": 100,
                     "active_companies": 1, "max_active_companies": 5,
@@ -264,7 +270,13 @@ async fn billing_plan_uses_snake_case_wire_format() {
 
     let corvo = client_for(&server);
     let plan = corvo.billing().plan().await.expect("plan");
-    assert_eq!(plan.plan.slug, "pro");
+    assert_eq!(plan.plan.slug, "equipe");
+    assert!(plan.subscription.stripe_portal_available);
+    assert_eq!(
+        plan.subscription.pix_subscription.unwrap().plan_slug,
+        "solo"
+    );
+    assert_eq!(plan.usage.avulso_balance, 3);
     assert_eq!(plan.plan.monthly_allowance, 1000);
     assert_eq!(plan.subscription.status, "active");
     assert_eq!(plan.usage.credits_remaining, 990);

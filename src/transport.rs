@@ -34,6 +34,8 @@ pub(crate) enum Method {
     Get,
     /// POST.
     Post,
+    /// PUT.
+    Put,
     /// PATCH.
     Patch,
     /// DELETE.
@@ -45,6 +47,7 @@ impl Method {
         match self {
             Method::Get => reqwest::Method::GET,
             Method::Post => reqwest::Method::POST,
+            Method::Put => reqwest::Method::PUT,
             Method::Patch => reqwest::Method::PATCH,
             Method::Delete => reqwest::Method::DELETE,
         }
@@ -59,6 +62,7 @@ pub(crate) struct RequestSpec {
     json: Option<Value>,
     form: Option<Box<dyn Fn() -> Form + Send + Sync>>,
     idempotency_key: Option<String>,
+    accept: Option<&'static str>,
     unwrap: Unwrap,
 }
 
@@ -85,6 +89,7 @@ impl RequestSpec {
             json: None,
             form: None,
             idempotency_key: None,
+            accept: None,
             unwrap: Unwrap::Data,
         }
     }
@@ -95,6 +100,10 @@ impl RequestSpec {
 
     pub(crate) fn post(path: &str) -> Self {
         Self::new(Method::Post, path)
+    }
+
+    pub(crate) fn put(path: &str) -> Self {
+        Self::new(Method::Put, path)
     }
 
     pub(crate) fn patch(path: &str) -> Self {
@@ -128,6 +137,12 @@ impl RequestSpec {
         self
     }
 
+    /// Override the `Accept` header (binary downloads).
+    pub(crate) fn accept(mut self, accept: &'static str) -> Self {
+        self.accept = Some(accept);
+        self
+    }
+
     pub(crate) fn unwrap_mode(mut self, mode: Unwrap) -> Self {
         self.unwrap = mode;
         self
@@ -145,7 +160,7 @@ pub(crate) fn push_query(
     }
 }
 
-/// A downloaded binary document (PDF/XML).
+/// A downloaded document (PDF, XML, ZIP or CSV).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DownloadedFile {
     /// Raw bytes of the document.
@@ -242,7 +257,7 @@ impl Transport {
             .client
             .request(spec.method.as_reqwest(), url)
             .header("X-API-Key", &self.api_key)
-            .header(ACCEPT, "application/json")
+            .header(ACCEPT, spec.accept.unwrap_or("application/json"))
             .header(
                 USER_AGENT,
                 concat!("corvo-nfse-rust/", env!("CARGO_PKG_VERSION")),
@@ -296,7 +311,14 @@ impl Transport {
         })
     }
 
-    /// Perform a request and return the raw bytes (PDF/XML downloads).
+    /// Perform a request whose answer body is ignored (`204`, or `{ data: ... }`).
+    pub(crate) async fn request_unit(&self, spec: &RequestSpec) -> Result<(), CorvoError> {
+        self.request_json::<serde::de::IgnoredAny>(spec)
+            .await
+            .map(|_| ())
+    }
+
+    /// Perform a request and return the raw bytes (PDF/XML/ZIP/CSV downloads).
     pub(crate) async fn request_raw(
         &self,
         spec: &RequestSpec,
